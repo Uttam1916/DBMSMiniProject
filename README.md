@@ -5,6 +5,7 @@ A hybrid relational database system combining **PostgreSQL 16** with the **pgvec
 The system enables campus students and staff to report lost and found belongings and uses vector similarity search to automatically discover and rank potential matches based on semantic meaning rather than fragile keyword lookups.
 
 ![Relational Schema Diagram](lost_found_relational_schema.png)
+![ER Diagram](lost_found_ER.png)
 
 ---
 
