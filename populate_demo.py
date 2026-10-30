@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """
-Populate demo data and compute embeddings using sentence-transformers/all-MiniLM-L6-v2.
+populate_demo.py: Insert additional demo items and claims into PostgreSQL.
+
+Distinction:
+- Adds demo items beyond the baseline records in campus_lost_found_setup.sql.
+- Adds demo claims.
+- Does NOT generate embeddings (embeddings remain NULL until generate_embeddings.py is run).
+- Idempotent: safe to run multiple times without duplicating data.
 """
+
 import os
 import sys
-
-# Ensure HF hub works without token issues
-os.environ["HF_HUB_DISABLE_IMPLICIT_TOKEN"] = "1"
-os.environ["HF_TOKEN"] = ""
-
 import psycopg2
-from fastembed import TextEmbedding
 
 DB_URL = os.environ.get("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/campus_lost_found")
 
@@ -93,19 +94,25 @@ ADDITIONAL_CLAIMS = [
 
 def main():
     print(f"Connecting to database: {DB_URL}...")
-    conn = psycopg2.connect(DB_URL)
-    conn.autocommit = True
-    cur = conn.cursor()
+    try:
+        conn = psycopg2.connect(DB_URL)
+        conn.autocommit = True
+        cur = conn.cursor()
+    except Exception as e:
+        print(f"Error connecting to database: {e}", file=sys.stderr)
+        sys.exit(1)
 
-    # 1. Insert additional items
-    print("Inserting additional demo items...")
+    # 1. Insert additional items (leaving embedding as NULL)
+    print("\n[Step 1] Inserting additional demo items (embeddings remain NULL)...")
+    inserted_items = 0
     for item in ADDITIONAL_ITEMS:
         cur.execute("""
             INSERT INTO item (title, description, item_type, item_date, status, reported_by, category_id, location_id)
             SELECT %s, %s, %s, CURRENT_DATE - %s, 'OPEN', u.user_id, c.category_id, l.location_id
             FROM users u CROSS JOIN category c CROSS JOIN location l
             WHERE u.email = %s AND c.name = %s AND l.name = %s
-              AND NOT EXISTS (SELECT 1 FROM item WHERE title = %s AND item_type = %s);
+              AND NOT EXISTS (SELECT 1 FROM item WHERE title = %s AND item_type = %s)
+            RETURNING item_id;
         """, (
             item["title"],
             item["description"],
@@ -117,9 +124,18 @@ def main():
             item["title"],
             item["item_type"]
         ))
+        res = cur.fetchone()
+        if res:
+            inserted_items += 1
+            print(f"  + Inserted item #{res[0]}: [{item['item_type']}] '{item['title']}'")
+        else:
+            print(f"  = Item already exists: [{item['item_type']}] '{item['title']}'")
+
+    print(f"-> Items check: {inserted_items} inserted, {len(ADDITIONAL_ITEMS) - inserted_items} already present.")
 
     # 2. Insert additional claims
-    print("Inserting additional demo claims...")
+    print("\n[Step 2] Inserting additional demo claims...")
+    inserted_claims = 0
     for claim in ADDITIONAL_CLAIMS:
         cur.execute("""
             INSERT INTO claim (proof_details, claim_status, claimed_by, item_id)
@@ -127,85 +143,42 @@ def main():
             FROM users u
             JOIN item i ON i.title = %s AND i.item_type = %s
             WHERE u.email = %s
+              AND i.status = 'OPEN'
               AND NOT EXISTS (
                   SELECT 1 FROM claim old_c
                   WHERE old_c.item_id = i.item_id
                     AND old_c.claimed_by = u.user_id
-                    AND old_c.claim_status = %s
-              );
+                    AND old_c.proof_details = %s
+              )
+            RETURNING claim_id;
         """, (
             claim["proof_details"],
             claim["claim_status"],
             claim["item_title"],
             claim["item_type"],
             claim["user_email"],
-            claim["claim_status"]
+            claim["proof_details"]
         ))
+        res = cur.fetchone()
+        if res:
+            inserted_claims += 1
+            print(f"  + Inserted claim #{res[0]}: [{claim['claim_status']}] for '{claim['item_title']}'")
+        else:
+            print(f"  = Claim already exists: [{claim['claim_status']}] for '{claim['item_title']}'")
 
-    # 3. Load embedding model
-    print("Loading embedding model 'sentence-transformers/all-MiniLM-L6-v2'...")
-    model = TextEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    print(f"-> Claims check: {inserted_claims} inserted, {len(ADDITIONAL_CLAIMS) - inserted_claims} already present.")
 
-    # 4. Fetch all items that need embeddings
-    cur.execute("SELECT item_id, title, description FROM item WHERE embedding IS NULL;")
-    rows = cur.fetchall()
-    print(f"Generating embeddings for {len(rows)} items...")
-
-    if rows:
-        texts = [f"{title}. {desc}" for _, title, desc in rows]
-        embeddings = list(model.embed(texts))
-
-        for (item_id, title, _), emb in zip(rows, embeddings):
-            emb_str = "[" + ",".join(f"{x:.6f}" for x in emb) + "]"
-            cur.execute("UPDATE item SET embedding = %s::vector WHERE item_id = %s;", (emb_str, item_id))
-            print(f"  -> Generated embedding for item {item_id}: '{title}'")
-
-    # 5. Populate ITEM_MATCH using find_matching_items
-    print("Populating item_match table with suggested matches...")
-    cur.execute("""
-        INSERT INTO item_match (
-            lost_item_id,
-            found_item_id,
-            similarity_score,
-            match_status
-        )
-        SELECT
-            lost.item_id,
-            candidate.found_item_id,
-            candidate.similarity_score,
-            'SUGGESTED'
-        FROM item lost
-        CROSS JOIN LATERAL
-            find_matching_items(lost.item_id, 5) candidate
-        WHERE lost.item_type = 'LOST'
-        ON CONFLICT (lost_item_id, found_item_id)
-        DO UPDATE SET
-            similarity_score = EXCLUDED.similarity_score,
-            match_status = 'SUGGESTED';
-    """)
-    print("Matches updated.")
-
-    # 6. Display generated matches
-    print("\n--- Current Suggested Matches ---")
-    cur.execute("""
-        SELECT
-            lost.item_id AS lost_id,
-            lost.title AS lost_title,
-            found.item_id AS found_id,
-            found.title AS found_title,
-            ROUND(m.similarity_score::numeric, 4) AS similarity
-        FROM item_match m
-        JOIN item lost ON lost.item_id = m.lost_item_id
-        JOIN item found ON found.item_id = m.found_item_id
-        ORDER BY m.similarity_score DESC;
-    """)
-    matches = cur.fetchall()
-    for row in matches:
-        print(f"Lost #{row[0]} '{row[1]}' <=> Found #{row[2]} '{row[3]}' (Similarity: {row[4]})")
+    # 3. Summary of items with NULL embeddings
+    cur.execute("SELECT COUNT(*) FROM item WHERE embedding IS NULL;")
+    null_embeddings_count = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM item;")
+    total_items = cur.fetchone()[0]
+    print(f"\n[Summary] Total items in database: {total_items}")
+    print(f"[Summary] Items with NULL embeddings: {null_embeddings_count}")
+    print("NOTE: No embeddings were generated. Run 'generate_embeddings.py' next to compute embeddings.")
 
     cur.close()
     conn.close()
-    print("\nDemo data and vector embeddings populated successfully!")
 
 if __name__ == "__main__":
     main()

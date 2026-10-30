@@ -1,27 +1,237 @@
 -- ==============================================================================
 -- CAMPUS LOST-AND-FOUND ITEM MATCHING SYSTEM
--- DEMO QUERIES FOR TA PRESENTATION / EVALUATION
+-- DEMONSTRATION QUERIES FOR TA PRESENTATION / EVALUATION
 -- ==============================================================================
 -- Database: campus_lost_found
 -- Connection URL: postgresql://postgres:postgres@localhost:5432/campus_lost_found
 --
--- How to run:
---   Option A (pgAdmin): Connect to server -> Open 'campus_lost_found' -> Query Tool -> Run queries one-by-one.
---   Option B (Terminal via Docker):
---     docker exec -it campus_postgres psql -U postgres -d campus_lost_found
---   Option C (Local psql):
---     psql -h localhost -U postgres -d campus_lost_found
+-- Demonstration Order:
+--   1. Display all items before embedding generation (showing NULL embeddings)
+--   2. Display items after generation (showing dimensions, vectors omitted)
+--   3. Demonstrate semantic matching using the water-bottle example
+--   4. Display persisted suggestions from ITEM_MATCH
+--   5. Display pending claims
+--   6. Approve the water-bottle claim (Trigger verification BEFORE and AFTER COMMIT)
+--   7. Demonstrate normal SQL queries:
+--      7.1 JOIN across multiple tables
+--      7.2 Views (item_details_view)
+--      7.3 GROUP BY, HAVING, and Aggregates
+--      7.4 Subqueries (IN with aggregated subquery)
+--      7.5 INSERT with dynamic foreign key lookups
+--      7.6 UPDATE with natural key lookups
+--      7.7 DELETE with RETURNING clause
+--      7.8 System-wide row count aggregates
 -- ==============================================================================
 
 
 -- ==============================================================================
--- QUERY 1 — Display all items with their categories, locations, and reporters
+-- 1. DISPLAY ALL ITEMS BEFORE EMBEDDING GENERATION (NULL EMBEDDINGS)
 -- ==============================================================================
--- Concepts Demonstrated: SELECT, INNER JOIN (multiple tables), ORDER BY
+-- Concepts Demonstrated: SELECT, NULL checking, initial system state inspection
 -- Description:
---   Performs multi-table joins across item, category, location, and users to present
---   a human-readable catalogue of all reported lost and found items sorted chronologically.
+--   Demonstrates that newly inserted items (from setup SQL and populate_demo.py)
+--   have NULL embeddings before the embedding model runs.
 -- ==============================================================================
+SELECT
+    item_id,
+    title,
+    item_type,
+    status,
+    embedding,
+    (embedding IS NULL) AS is_embedding_null
+FROM item
+ORDER BY item_id;
+
+
+
+-- ==============================================================================
+-- 2. DISPLAY ITEMS AFTER GENERATION (SHOWING VECTOR DIMENSIONS)
+-- ==============================================================================
+-- Concepts Demonstrated: pgvector vector_dims(), boolean expressions, data integrity
+-- Description:
+--   Executed after running generate_embeddings.py. Shows that every item now has
+--   a dense vector stored, and verifies its dimensionality (384 dimensions)
+--   without dumping massive vector float arrays to the console.
+-- ==============================================================================
+SELECT
+    item_id,
+    title,
+    item_type,
+    status,
+    (embedding IS NOT NULL) AS has_embedding,
+    vector_dims(embedding) AS embedding_dims
+FROM item
+ORDER BY item_id;
+
+
+
+-- ==============================================================================
+-- 3. DEMONSTRATE SEMANTIC MATCHING USING THE WATER-BOTTLE EXAMPLE
+-- ==============================================================================
+-- Concepts Demonstrated:
+--   - pgvector Cosine Distance operator (<=>)
+--   - Stored Function: find_matching_items(lost_id, limit)
+--   - Dense Vector Semantic Similarity: 1 - (lost <=> found)
+-- Description:
+--   Demonstrates semantic retrieval on the lost item 'Black stainless-steel bottle'.
+--   Even though the reported lost text is 'Black stainless-steel bottle' and the
+--   found item text is 'Dark metal water bottle', cosine similarity identifies them
+--   as the top match (~0.75+ similarity) based on conceptual meaning rather than
+--   exact keyword matching!
+-- ==============================================================================
+SELECT
+    found_item_id,
+    title AS found_title,
+    description AS found_description,
+    ROUND(similarity_score::numeric, 4) AS similarity_score
+FROM find_matching_items(
+    (
+        SELECT item_id
+        FROM item
+        WHERE title = 'Black stainless-steel bottle'
+          AND item_type = 'LOST'
+        LIMIT 1
+    ),
+    5
+);
+
+
+
+-- ==============================================================================
+-- 4. DISPLAY PERSISTED SUGGESTIONS FROM ITEM_MATCH
+-- ==============================================================================
+-- Concepts Demonstrated:
+--   - Persisted Recommendations Table (item_match)
+--   - Many-to-Many Relationships
+--   - PostgreSQL DISTINCT ON for deduplicating top candidate per lost item
+-- Description:
+--   4A displays all persisted candidate suggestions with similarity scores.
+--   4B displays only the #1 highest-confidence found match for each lost item.
+-- ==============================================================================
+
+-- 4A: All persisted candidate pairs ordered by similarity
+SELECT
+    m.lost_item_id,
+    lost.title AS lost_item,
+    m.found_item_id,
+    found.title AS matching_found_item,
+    ROUND(m.similarity_score::numeric, 4) AS similarity_score,
+    m.match_status
+FROM item_match m
+JOIN item lost ON lost.item_id = m.lost_item_id
+JOIN item found ON found.item_id = m.found_item_id
+ORDER BY m.lost_item_id, m.similarity_score DESC;
+
+-- 4B: Top suggested candidate per lost item (using DISTINCT ON)
+SELECT DISTINCT ON (m.lost_item_id)
+    lost.item_id AS lost_id,
+    lost.title AS lost_item,
+    found.item_id AS found_id,
+    found.title AS best_matching_found_item,
+    ROUND(m.similarity_score::numeric, 4) AS similarity_score,
+    m.match_status
+FROM item_match m
+JOIN item lost ON lost.item_id = m.lost_item_id
+JOIN item found ON found.item_id = m.found_item_id
+ORDER BY m.lost_item_id, m.similarity_score DESC;
+
+
+
+-- ==============================================================================
+-- 5. DISPLAY PENDING CLAIMS
+-- ==============================================================================
+-- Concepts Demonstrated: Database Views (pending_claims_view), Join abstraction
+-- Description:
+--   Queries the pre-defined view 'pending_claims_view' which aggregates claim
+--   details, claimant names, and target found items for administrative review.
+-- ==============================================================================
+SELECT
+    claim_id,
+    claim_date,
+    claimant_name,
+    item_title,
+    proof_details,
+    claim_status
+FROM pending_claims_view
+ORDER BY claim_date DESC, claim_id DESC;
+
+
+
+-- ==============================================================================
+-- 6. APPROVE WATER-BOTTLE CLAIM & DEMONSTRATE TRIGGER AUTOMATION
+-- ==============================================================================
+-- Concepts Demonstrated:
+--   - ACID Transactions: BEGIN ... COMMIT
+--   - Triggers: 'sync_item_status_after_claim' fired AFTER UPDATE OF claim_status
+--   - Automatic State Synchronization: Changing claim_status to 'APPROVED'
+--     automatically updates the item's status from 'OPEN' to 'CLAIMED'
+--   - Verification: Explicitly checked BEFORE update, INSIDE transaction, and AFTER COMMIT.
+-- ==============================================================================
+
+-- Step 6.1: Initial State Check (Notice status is 'OPEN' and claim is 'PENDING')
+SELECT
+    i.item_id,
+    i.title,
+    i.status AS item_status,
+    cl.claim_id,
+    cl.claim_status
+FROM item i
+JOIN claim cl ON cl.item_id = i.item_id
+WHERE i.title = 'Dark metal water bottle';
+
+-- Step 6.2: Begin Transaction, Approve Claim, and Verify Inside Transaction (BEFORE COMMIT)
+BEGIN;
+
+UPDATE claim
+SET claim_status = 'APPROVED'
+WHERE claim_id = (
+    SELECT cl.claim_id
+    FROM claim cl
+    JOIN item i ON i.item_id = cl.item_id
+    WHERE i.title = 'Dark metal water bottle'
+      AND cl.claim_status = 'PENDING'
+    ORDER BY cl.claim_date
+    LIMIT 1
+);
+
+-- Verification inside transaction (BEFORE COMMIT):
+-- Notice that item_status has AUTOMATICALLY transitioned to 'CLAIMED' via the trigger!
+SELECT
+    i.item_id,
+    i.title,
+    i.status AS item_status,
+    cl.claim_id,
+    cl.claim_status
+FROM item i
+JOIN claim cl ON cl.item_id = i.item_id
+WHERE i.title = 'Dark metal water bottle';
+
+COMMIT;
+
+-- Step 6.3: Verification AFTER COMMIT (Persisted State):
+-- Confirms that item status = 'CLAIMED' is permanently committed to the database.
+SELECT
+    i.item_id,
+    i.title,
+    i.status AS item_status,
+    cl.claim_id,
+    cl.claim_status
+FROM item i
+JOIN claim cl ON cl.item_id = i.item_id
+WHERE i.title = 'Dark metal water bottle';
+
+
+
+-- ==============================================================================
+-- 7. DEMONSTRATE NORMAL SQL QUERIES
+-- ==============================================================================
+
+-- ------------------------------------------------------------------------------
+-- 7.1 Multi-Table INNER JOIN
+-- ------------------------------------------------------------------------------
+-- Concepts: SELECT, INNER JOIN (across 4 tables), ORDER BY
+-- Description: Generates a complete human-readable item catalogue.
+-- ------------------------------------------------------------------------------
 SELECT
     i.item_id,
     i.title,
@@ -38,16 +248,12 @@ JOIN users u ON i.reported_by = u.user_id
 ORDER BY i.item_date DESC, i.item_id DESC;
 
 
-
--- ==============================================================================
--- QUERY 2 — Search for open lost items at the Library
--- ==============================================================================
--- Concepts Demonstrated: Database Views, WHERE filtering with multiple conditions
--- Description:
---   Queries the pre-defined view 'item_details_view' (which encapsulates the joins
---   between item, users, category, and location) and filters for items that are currently
---   unresolved (status = 'OPEN'), lost (item_type = 'LOST'), and at a specific campus zone ('Library').
--- ==============================================================================
+-- ------------------------------------------------------------------------------
+-- 7.2 Database View & Multi-Condition Filtering
+-- ------------------------------------------------------------------------------
+-- Concepts: Database Views (item_details_view), WHERE clause with multiple AND conditions
+-- Description: Queries the view for open lost items reported at the Library.
+-- ------------------------------------------------------------------------------
 SELECT
     item_id,
     title,
@@ -65,25 +271,18 @@ WHERE item_type = 'LOST'
 ORDER BY item_date DESC;
 
 
-
--- ==============================================================================
--- QUERY 3 — Count lost and found items grouped by category
--- ==============================================================================
--- Concepts Demonstrated: COUNT(), GROUP BY, FILTER (WHERE ...), HAVING, LEFT JOIN, ORDER BY
--- Description:
---   Aggregates items per category, providing a breakdown of total items, lost items,
---   and found items using SQL FILTER clauses. The HAVING clause ensures only categories
---   with at least one report are returned.
--- ==============================================================================
+-- ------------------------------------------------------------------------------
+-- 7.3 GROUP BY, HAVING, and Aggregates
+-- ------------------------------------------------------------------------------
+-- Concepts: COUNT(), GROUP BY, conditional FILTER (WHERE ...), HAVING, LEFT JOIN
+-- Description: Breaks down lost vs. found item counts per category, filtering
+--              only categories that have at least one reported item.
+-- ------------------------------------------------------------------------------
 SELECT
     c.name AS category,
     COUNT(i.item_id) AS total_items,
-    COUNT(i.item_id) FILTER (
-        WHERE i.item_type = 'LOST'
-    ) AS lost_items,
-    COUNT(i.item_id) FILTER (
-        WHERE i.item_type = 'FOUND'
-    ) AS found_items
+    COUNT(i.item_id) FILTER (WHERE i.item_type = 'LOST') AS lost_items,
+    COUNT(i.item_id) FILTER (WHERE i.item_type = 'FOUND') AS found_items
 FROM category c
 LEFT JOIN item i ON i.category_id = c.category_id
 GROUP BY c.category_id, c.name
@@ -91,36 +290,12 @@ HAVING COUNT(i.item_id) > 0
 ORDER BY total_items DESC;
 
 
-
--- ==============================================================================
--- QUERY 4 — Display pending claims awaiting verification
--- ==============================================================================
--- Concepts Demonstrated: Database View (pending_claims_view), Join abstraction
--- Description:
---   Queries 'pending_claims_view' which gathers the claim ID, claimant details,
---   the target found item title, proof details, and claim status for quick administrative review.
--- ==============================================================================
-SELECT
-    claim_id,
-    claim_date,
-    claimant_name,
-    item_title,
-    proof_details,
-    claim_status
-FROM pending_claims_view
-ORDER BY claim_date DESC, claim_id DESC;
-
-
-
--- ==============================================================================
--- QUERY 5 — Find users who have submitted multiple claims
--- ==============================================================================
--- Concepts Demonstrated: Subquery with IN, GROUP BY, HAVING COUNT(*) > 1
--- Description:
---   Identifies frequent claimants or potential spam/duplicate claim activity by
---   filtering users whose user_id appears in an aggregated subquery on the claim table
---   with a count strictly greater than 1.
--- ==============================================================================
+-- ------------------------------------------------------------------------------
+-- 7.4 Subqueries (IN with Aggregated Subquery)
+-- ------------------------------------------------------------------------------
+-- Concepts: Subquery with IN, GROUP BY, HAVING COUNT(*) > 1
+-- Description: Finds frequent claimants who have submitted more than one claim.
+-- ------------------------------------------------------------------------------
 SELECT
     user_id,
     name,
@@ -135,16 +310,13 @@ WHERE user_id IN (
 );
 
 
-
--- ==============================================================================
--- QUERY 6 — Insert a new lost-item report using foreign key lookups
--- ==============================================================================
--- Concepts Demonstrated: INSERT INTO ... SELECT, CROSS JOIN lookups, DEFAULT values
--- Description:
---   Demonstrates safe insertion without hardcoding foreign keys. It resolves user_id,
---   category_id, and location_id by email and name via CROSS JOIN. The new item defaults
---   to status = 'OPEN' with embedding = NULL until processed by the model.
--- ==============================================================================
+-- ------------------------------------------------------------------------------
+-- 7.5 INSERT with Dynamic Foreign Key Lookups
+-- ------------------------------------------------------------------------------
+-- Concepts: INSERT INTO ... SELECT, CROSS JOIN lookups, RETURNING clause
+-- Description: Safely inserts a new lost-item record by dynamically resolving
+--              natural identifiers (email, category name, location name).
+-- ------------------------------------------------------------------------------
 INSERT INTO item (
     title,
     description,
@@ -171,56 +343,25 @@ WHERE u.email = 'student@campus.edu'
 RETURNING item_id, title, item_type, status, item_date;
 
 
-
--- ==============================================================================
--- QUERY 7 — Approve a claim (Transaction + Trigger Demo)
--- ==============================================================================
--- Concepts Demonstrated:
---   - Transactions: BEGIN ... COMMIT
---   - Data modification: UPDATE with subquery and LIMIT
---   - Triggers: 'sync_item_status_after_claim' automatically transitions the item's
---     status from 'OPEN' to 'CLAIMED' upon claim approval!
--- Description:
---   Approves the oldest pending claim for 'Dark metal water bottle'. The trigger
---   fired after the update automatically updates the corresponding item's status to 'CLAIMED'.
--- ==============================================================================
-BEGIN;
-
-UPDATE claim
-SET claim_status = 'APPROVED'
-WHERE claim_id = (
-    SELECT cl.claim_id
-    FROM claim cl
-    JOIN item i ON i.item_id = cl.item_id
-    WHERE i.title = 'Dark metal water bottle'
-      AND cl.claim_status = 'PENDING'
-    ORDER BY cl.claim_date
-    LIMIT 1
-);
-
--- Verification: Observe that item status is now automatically 'CLAIMED'
-SELECT
-    i.item_id,
-    i.title,
-    i.status AS item_status,
-    cl.claim_id,
-    cl.claim_status
-FROM item i
-JOIN claim cl ON cl.item_id = i.item_id
-WHERE i.title = 'Dark metal water bottle';
-
-COMMIT;
+-- ------------------------------------------------------------------------------
+-- 7.6 UPDATE with Natural Key Lookups
+-- ------------------------------------------------------------------------------
+-- Concepts: UPDATE ... FROM, natural identifier resolution, RETURNING clause
+-- Description: Updates the description and location of the recently inserted 'Red umbrella'.
+-- ------------------------------------------------------------------------------
+UPDATE item
+SET description = 'Red folding compact umbrella with wooden handle',
+    location_id = (SELECT location_id FROM location WHERE name = 'Library')
+WHERE title = 'Red umbrella'
+RETURNING item_id, title, description, location_id;
 
 
-
--- ==============================================================================
--- QUERY 8 — Delete a rejected claim
--- ==============================================================================
--- Concepts Demonstrated: DELETE, Subquery, LIMIT, RETURNING clause
--- Description:
---   Removes one rejected claim from the system and uses 'RETURNING *' to output
---   the exact deleted row for audit confirmation.
--- ==============================================================================
+-- ------------------------------------------------------------------------------
+-- 7.7 DELETE with RETURNING Clause
+-- ------------------------------------------------------------------------------
+-- Concepts: DELETE, Subquery with LIMIT, RETURNING clause for audit trail
+-- Description: Removes one rejected claim and returns the deleted record for auditing.
+-- ------------------------------------------------------------------------------
 DELETE FROM claim
 WHERE claim_id = (
     SELECT claim_id
@@ -232,67 +373,12 @@ WHERE claim_id = (
 RETURNING claim_id, claim_date, proof_details, claim_status, claimed_by, item_id;
 
 
-
--- ==============================================================================
--- QUERY 9 — Vector Semantic Similarity Search (pgvector)
--- ==============================================================================
--- Concepts Demonstrated:
---   - pgvector extension
---   - Cosine Distance operator (<=>)
---   - Stored Function (find_matching_items)
---   - Ranking by semantic similarity: similarity_score = 1 - (lost <=> found)
--- Description:
---   Takes the 384-dimensional embedding of the lost report 'Black stainless-steel bottle'
---   and queries open found items using cosine vector distance. It accurately ranks
---   'Dark metal water bottle' as the top match (~0.75 score), despite different wording!
--- ==============================================================================
-SELECT
-    found_item_id,
-    title AS found_title,
-    description AS found_description,
-    ROUND(similarity_score::numeric, 4) AS similarity_score
-FROM find_matching_items(
-    (
-        SELECT item_id
-        FROM item
-        WHERE title = 'Black stainless-steel bottle'
-          AND item_type = 'LOST'
-        LIMIT 1
-    ),
-    5
-);
-
-
-
--- ==============================================================================
--- QUERY 10 — Top suggested matches across all lost items (ITEM_MATCH Table)
--- ==============================================================================
--- Concepts Demonstrated: DISTINCT ON, Multi-table JOINs, AI Match Pipeline
--- Description:
---   Inspects the 'item_match' table (which persists generated match suggestions)
---   and displays the #1 highest-confidence found candidate for every lost item.
--- ==============================================================================
-SELECT DISTINCT ON (m.lost_item_id)
-    lost.item_id AS lost_id,
-    lost.title AS lost_item,
-    found.item_id AS found_id,
-    found.title AS best_matching_found_item,
-    ROUND(m.similarity_score::numeric, 4) AS similarity_score,
-    m.match_status
-FROM item_match m
-JOIN item lost ON lost.item_id = m.lost_item_id
-JOIN item found ON found.item_id = m.found_item_id
-ORDER BY m.lost_item_id, m.similarity_score DESC;
-
-
-
--- ==============================================================================
--- QUERY 11 — Database Overview & Verification (Table Counts)
--- ==============================================================================
--- Concepts Demonstrated: UNION ALL, Aggregations, System health check
--- Description:
---   Provides an executive snapshot of row counts in all 6 core tables.
--- ==============================================================================
+-- ------------------------------------------------------------------------------
+-- 7.8 System Health & Table Row Count Aggregations
+-- ------------------------------------------------------------------------------
+-- Concepts: UNION ALL, Aggregate COUNT(*), relational system verification
+-- Description: Provides an executive overview of row counts across all 6 core tables.
+-- ------------------------------------------------------------------------------
 SELECT 'users' AS table_name, COUNT(*) AS row_count FROM users
 UNION ALL
 SELECT 'category', COUNT(*) FROM category

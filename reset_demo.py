@@ -4,7 +4,6 @@ Quick reset script for demo state.
 Resets demo items and claims back to baseline for re-running TA demonstrations.
 """
 import os
-import subprocess
 import psycopg2
 
 DB_URL = os.environ.get("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/campus_lost_found")
