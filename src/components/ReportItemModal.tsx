@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { Category, Location, User } from '@/types';
-import { X, Sparkles, AlertCircle } from 'lucide-react';
+import { X, AlertCircle } from 'lucide-react';
 
 interface ReportItemModalProps {
   isOpen: boolean;
@@ -11,6 +11,7 @@ interface ReportItemModalProps {
   locations: Location[];
   currentUser: User | null;
   onSuccess: () => void;
+  onOpenSignIn?: () => void;
 }
 
 export default function ReportItemModal({
@@ -20,33 +21,32 @@ export default function ReportItemModal({
   locations,
   currentUser,
   onSuccess,
+  onOpenSignIn,
 }: ReportItemModalProps) {
+  const [itemType, setItemType] = useState<'LOST' | 'FOUND'>('LOST');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [itemType, setItemType] = useState<'LOST' | 'FOUND'>('LOST');
-  const [categoryId, setCategoryId] = useState<string>(
-    categories[0]?.category_id ? String(categories[0].category_id) : '1'
-  );
-  const [locationId, setLocationId] = useState<string>(
-    locations[0]?.location_id ? String(locations[0].location_id) : '1'
-  );
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [categoryId, setCategoryId] = useState<number>(categories[0]?.category_id || 1);
+  const [locationId, setLocationId] = useState<number>(locations[0]?.location_id || 1);
+  const [itemDate, setItemDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !description.trim()) {
-      setError('Please provide both a title and description.');
-      return;
-    }
     if (!currentUser) {
-      setError('No active user selected.');
+      setError('Please sign in before submitting a report.');
       return;
     }
 
-    setIsSubmitting(true);
+    if (!title.trim() || !description.trim()) {
+      setError('Please provide both a title and descriptive details.');
+      return;
+    }
+
+    setLoading(true);
     setError(null);
 
     try {
@@ -57,133 +57,137 @@ export default function ReportItemModal({
           title: title.trim(),
           description: description.trim(),
           item_type: itemType,
-          category_id: Number(categoryId),
-          location_id: Number(locationId),
+          category_id: categoryId,
+          location_id: locationId,
           reported_by: currentUser.user_id,
+          item_date: itemDate,
         }),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || data.details || 'Failed to submit item');
+        throw new Error(data.details || data.error || 'Failed to submit report');
       }
 
-      onSuccess();
-      onClose();
+      // Reset form
       setTitle('');
       setDescription('');
+      onSuccess();
+      onClose();
     } catch (err: any) {
       setError(err.message);
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl border border-slate-200 shadow-xl max-w-lg w-full overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 overflow-y-auto">
+      <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white shadow-xl my-auto">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
           <div>
-            <h3 className="text-base font-bold text-slate-900">
-              Report Campus Belonging
-            </h3>
-            <p className="text-xs text-slate-500">
-              Item will be indexed and auto-matched using 384-dim text embeddings.
+            <h2 className="text-base font-semibold text-slate-900">
+              {itemType === 'LOST' ? 'Report a Lost Item' : 'Report a Found Item'}
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Enter identifying details to record the item in the central campus registry.
             </p>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 rounded-lg p-1"
+            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
+            aria-label="Close"
           >
-            <X className="w-5 h-5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        {/* Body */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 text-xs sm:text-sm">
           {error && (
-            <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center space-x-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
+            <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 flex items-start space-x-2">
+              <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
               <span>{error}</span>
+            </div>
+          )}
+
+          {!currentUser && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 flex items-center justify-between">
+              <span>You must be signed in to submit an official campus report.</span>
+              {onOpenSignIn && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenSignIn();
+                  }}
+                  className="rounded bg-amber-800 px-2.5 py-1 text-white font-medium hover:bg-amber-900 transition"
+                >
+                  Sign In
+                </button>
+              )}
             </div>
           )}
 
           {/* Type Toggle */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-              Report Type
+            <label className="text-xs font-medium text-slate-700 block mb-1.5">
+              Report Category
             </label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => setItemType('LOST')}
-                className={`py-2 px-3 text-xs font-semibold rounded-lg border transition ${
+                className={`rounded-lg border p-2.5 text-xs font-medium text-center transition ${
                   itemType === 'LOST'
-                    ? 'bg-rose-50 border-rose-300 text-rose-800'
-                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    ? 'border-slate-900 bg-slate-900 text-white'
+                    : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
                 }`}
               >
-                🔴 Lost Something
+                Lost Item (I misplaced something)
               </button>
               <button
                 type="button"
                 onClick={() => setItemType('FOUND')}
-                className={`py-2 px-3 text-xs font-semibold rounded-lg border transition ${
+                className={`rounded-lg border p-2.5 text-xs font-medium text-center transition ${
                   itemType === 'FOUND'
-                    ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
-                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    ? 'border-slate-900 bg-slate-900 text-white'
+                    : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
                 }`}
               >
-                🟢 Found Something
+                Found Item (I turned in something)
               </button>
             </div>
           </div>
 
           {/* Title */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Item Title *
+            <label htmlFor="item-title" className="text-xs font-medium text-slate-700 block mb-1">
+              Item Title <span className="text-rose-500">*</span>
             </label>
             <input
+              id="item-title"
               type="text"
               required
-              placeholder="e.g., Black stainless-steel bottle"
+              placeholder="e.g., Black stainless-steel water bottle"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3 py-2 text-xs sm:text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs sm:text-sm text-slate-900 focus:border-slate-400 focus:outline-none transition"
             />
           </div>
 
-          {/* Description */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Description &amp; Identifying Details *
-            </label>
-            <textarea
-              required
-              rows={3}
-              placeholder="Provide color, brand, stickers, distinct markings, or contents..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-3 py-2 text-xs sm:text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            />
-            <p className="text-[11px] text-slate-400 mt-1 flex items-center space-x-1">
-              <Sparkles className="w-3 h-3 text-indigo-500 inline" />
-              <span>Used by FastEmbed to compute semantic cosine distance.</span>
-            </p>
-          </div>
-
-          {/* Category & Location Selects */}
+          {/* Category & Location */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Category
+              <label htmlFor="item-category" className="text-xs font-medium text-slate-700 block mb-1">
+                Category <span className="text-rose-500">*</span>
               </label>
               <select
+                id="item-category"
                 value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
-                className="w-full px-3 py-2 text-xs sm:text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                onChange={(e) => setCategoryId(Number(e.target.value))}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs sm:text-sm text-slate-900 focus:border-slate-400 focus:outline-none transition"
               >
                 {categories.map((c) => (
                   <option key={c.category_id} value={c.category_id}>
@@ -194,13 +198,14 @@ export default function ReportItemModal({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Campus Location
+              <label htmlFor="item-location" className="text-xs font-medium text-slate-700 block mb-1">
+                Campus Location <span className="text-rose-500">*</span>
               </label>
               <select
+                id="item-location"
                 value={locationId}
-                onChange={(e) => setLocationId(e.target.value)}
-                className="w-full px-3 py-2 text-xs sm:text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                onChange={(e) => setLocationId(Number(e.target.value))}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs sm:text-sm text-slate-900 focus:border-slate-400 focus:outline-none transition"
               >
                 {locations.map((l) => (
                   <option key={l.location_id} value={l.location_id}>
@@ -211,28 +216,62 @@ export default function ReportItemModal({
             </div>
           </div>
 
-          {/* Reporting Attribution Note */}
-          <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-600">
-            Reporting as: <span className="font-semibold text-slate-900">{currentUser?.name}</span> ({currentUser?.email} - {currentUser?.role})
+          {/* Date */}
+          <div>
+            <label htmlFor="item-date" className="text-xs font-medium text-slate-700 block mb-1">
+              Date {itemType === 'LOST' ? 'Misplaced' : 'Found'} <span className="text-rose-500">*</span>
+            </label>
+            <input
+              id="item-date"
+              type="date"
+              required
+              value={itemDate}
+              onChange={(e) => setItemDate(e.target.value)}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs sm:text-sm text-slate-900 focus:border-slate-400 focus:outline-none transition"
+            />
           </div>
 
+          {/* Description */}
+          <div>
+            <label htmlFor="item-description" className="text-xs font-medium text-slate-700 block mb-1">
+              Identifying Description <span className="text-rose-500">*</span>
+            </label>
+            <textarea
+              id="item-description"
+              rows={3}
+              required
+              placeholder="Provide color, brand, stickers, scratches, contents, or other distinguishing marks..."
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs sm:text-sm text-slate-900 focus:border-slate-400 focus:outline-none transition"
+            />
+            <p className="text-[11px] text-slate-500 mt-1">
+              This text is automatically converted into a 384-dimensional dense vector to identify semantic matches.
+            </p>
+          </div>
+
+          {/* Footer Submitter Notice */}
+          {currentUser && (
+            <div className="text-[11px] text-slate-500 pt-1">
+              Reporting as: <strong className="text-slate-700">{currentUser.name}</strong> ({currentUser.email} • {currentUser.role})
+            </div>
+          )}
+
           {/* Actions */}
-          <div className="pt-2 flex items-center justify-end space-x-2">
+          <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-200">
             <button
               type="button"
               onClick={onClose}
-              disabled={isSubmitting}
-              className="px-4 py-2 text-xs font-medium rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50"
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
-              className="inline-flex items-center space-x-1.5 px-4 py-2 text-xs font-medium rounded-lg bg-slate-900 hover:bg-slate-800 text-white shadow-sm disabled:opacity-50"
+              disabled={loading || !currentUser}
+              className="rounded-lg bg-slate-900 px-4 py-2 text-xs font-medium text-white hover:bg-slate-800 transition disabled:opacity-50"
             >
-              <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-              <span>{isSubmitting ? 'Generating Embeddings...' : 'Submit & Match'}</span>
+              {loading ? 'Submitting & Embedding...' : 'Submit Report'}
             </button>
           </div>
         </form>

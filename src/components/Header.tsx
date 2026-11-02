@@ -2,129 +2,294 @@
 
 import React, { useState } from 'react';
 import { User } from '@/types';
-import { Database, RotateCcw, ShieldCheck, UserCheck, AlertCircle, CheckCircle2 } from 'lucide-react';
+import {
+  Compass,
+  FileText,
+  ClipboardCheck,
+  Plus,
+  LogOut,
+  User as UserIcon,
+  ChevronDown,
+  Terminal,
+  RotateCcw,
+} from 'lucide-react';
+
+export type MainNavView = 'browse' | 'activity' | 'claims';
 
 interface HeaderProps {
+  currentView: MainNavView;
+  onSelectView: (view: MainNavView) => void;
   currentUser: User | null;
-  users: User[];
-  onSelectUser: (user: User) => void;
-  onResetDatabase: () => Promise<void>;
+  onSignOut: () => void;
+  onOpenSignIn: () => void;
+  onOpenReportModal: () => void;
+  onOpenSystemTools: () => void;
+  pendingClaimsCount: number;
+  userReportsCount: number;
+  userClaimsCount: number;
 }
 
 export default function Header({
+  currentView,
+  onSelectView,
   currentUser,
-  users,
-  onSelectUser,
-  onResetDatabase,
+  onSignOut,
+  onOpenSignIn,
+  onOpenReportModal,
+  onOpenSystemTools,
+  pendingClaimsCount,
+  userReportsCount,
+  userClaimsCount,
 }: HeaderProps) {
-  const [isResetting, setIsResetting] = useState(false);
-  const [resetMessage, setResetMessage] = useState<string | null>(null);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
-  const handleReset = async () => {
-    if (!confirm('Reset database to clean baseline demo state? This will clear test items and restore demo records.')) {
-      return;
-    }
-    setIsResetting(true);
-    try {
-      await onResetDatabase();
-      setResetMessage('Baseline demo data restored successfully!');
-      setTimeout(() => setResetMessage(null), 4000);
-    } catch (err: any) {
-      alert(`Reset failed: ${err.message}`);
-    } finally {
-      setIsResetting(false);
-    }
-  };
-
-  const getRoleBadge = (role?: string) => {
-    switch (role) {
-      case 'ADMIN':
-        return 'bg-purple-100 text-purple-800 border-purple-200';
-      case 'STAFF':
-        return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'STUDENT':
-      default:
-        return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-    }
-  };
+  const isStaffOrAdmin = currentUser?.role === 'STAFF' || currentUser?.role === 'ADMIN';
 
   return (
-    <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm">
+    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo & Project Title */}
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-lg bg-slate-900 text-white flex items-center justify-center font-bold text-lg shadow-sm">
-              <Database className="w-5 h-5 text-indigo-400" />
-            </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <h1 className="text-lg font-semibold text-slate-900 tracking-tight">
-                  Campus Lost & Found
-                </h1>
-                <span className="text-xs px-2 py-0.5 font-medium rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
-                  PostgreSQL + pgvector
+        <div className="flex h-16 items-center justify-between gap-4">
+          {/* Brand & Main Navigation */}
+          <div className="flex items-center space-x-6">
+            {/* Campus Brand */}
+            <div
+              onClick={() => onSelectView('browse')}
+              className="flex cursor-pointer items-center space-x-2.5 select-none"
+            >
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-white font-semibold text-xs">
+                LF
+              </div>
+              <div>
+                <span className="text-sm font-semibold tracking-tight text-slate-900 block leading-tight">
+                  Campus Lost &amp; Found
+                </span>
+                <span className="text-[11px] text-slate-500 block leading-tight">
+                  University Central Registry
                 </span>
               </div>
-              <p className="text-xs text-slate-500 hidden sm:block">
-                DBMS Level 3 Experiential Learning System
-              </p>
             </div>
+
+            {/* Desktop Navigation Links */}
+            <nav className="hidden md:flex items-center space-x-1" aria-label="Main Navigation">
+              <button
+                onClick={() => onSelectView('browse')}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                  currentView === 'browse'
+                    ? 'bg-slate-100 text-slate-900'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                }`}
+              >
+                <Compass className="h-3.5 w-3.5" />
+                <span>Browse Items</span>
+              </button>
+
+              <button
+                onClick={() => onSelectView('activity')}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                  currentView === 'activity'
+                    ? 'bg-slate-100 text-slate-900'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                }`}
+              >
+                <FileText className="h-3.5 w-3.5" />
+                <span>My Activity</span>
+                {currentUser && (userReportsCount + userClaimsCount > 0) && (
+                  <span className="ml-1 text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-700">
+                    {userReportsCount + userClaimsCount}
+                  </span>
+                )}
+              </button>
+
+              {isStaffOrAdmin && (
+                <button
+                  onClick={() => onSelectView('claims')}
+                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                    currentView === 'claims'
+                      ? 'bg-slate-100 text-slate-900'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                >
+                  <ClipboardCheck className="h-3.5 w-3.5" />
+                  <span>Review Claims</span>
+                  {pendingClaimsCount > 0 && (
+                    <span className="ml-1 text-[10px] px-1.5 py-0.2 rounded-full bg-slate-900 text-white font-semibold">
+                      {pendingClaimsCount}
+                    </span>
+                  )}
+                </button>
+              )}
+            </nav>
           </div>
 
-          {/* Action Bar & Role Switcher */}
-          <div className="flex items-center space-x-3">
-            {/* Reset Database Button */}
+          {/* Right Utilities & Auth */}
+          <div className="flex items-center space-x-2.5">
+            {/* Primary Action: Report Item */}
             <button
-              onClick={handleReset}
-              disabled={isResetting}
-              className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 transition disabled:opacity-50"
-              title="Resets database to baseline demo records for presentation"
+              onClick={onOpenReportModal}
+              className="inline-flex items-center space-x-1.5 rounded-lg bg-slate-900 px-3.5 py-1.5 text-xs font-medium text-white hover:bg-slate-800 transition shadow-sm"
             >
-              <RotateCcw className={`w-3.5 h-3.5 text-slate-500 ${isResetting ? 'animate-spin' : ''}`} />
-              <span className="hidden md:inline">{isResetting ? 'Resetting...' : 'Reset Demo DB'}</span>
+              <Plus className="h-3.5 w-3.5" />
+              <span>Report Item</span>
             </button>
 
-            {/* Role Switcher Dropdown */}
-            <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5">
-              <UserCheck className="w-4 h-4 text-slate-500" />
-              <div className="text-xs text-slate-600 hidden lg:block">Active Role:</div>
-              <select
-                aria-label="Active User Role"
-                className="text-xs font-medium bg-transparent text-slate-800 outline-none cursor-pointer"
-                value={currentUser?.user_id || ''}
-                onChange={(e) => {
-                  const selected = users.find((u) => u.user_id === Number(e.target.value));
-                  if (selected) onSelectUser(selected);
-                }}
-              >
-                {users.map((u) => (
-                  <option key={u.user_id} value={u.user_id}>
-                    {u.name} ({u.role})
-                  </option>
-                ))}
-              </select>
-              {currentUser && (
-                <span
-                  className={`text-[11px] px-1.5 py-0.5 rounded font-semibold border ${getRoleBadge(
-                    currentUser.role
-                  )}`}
+            {/* System / SQL Console Utility for Evaluation */}
+            <button
+              onClick={onOpenSystemTools}
+              className="hidden lg:inline-flex items-center space-x-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition"
+              title="Open DBMS Level 3 Evaluation Console, SQL Runner & Schema Inspector"
+            >
+              <Terminal className="h-3.5 w-3.5 text-slate-500" />
+              <span>Database Tools</span>
+            </button>
+
+            {/* User Profile / Authentication Menu */}
+            {currentUser ? (
+              <div className="relative">
+                <button
+                  onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                  className="flex items-center space-x-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 hover:border-slate-300 transition"
                 >
-                  {currentUser.role}
-                </span>
-              )}
-            </div>
+                  <div className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-200 text-slate-700 text-[10px] font-semibold">
+                    {currentUser.name.charAt(0)}
+                  </div>
+                  <span className="hidden sm:inline font-medium">{currentUser.name}</span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded font-medium ${
+                      currentUser.role === 'ADMIN'
+                        ? 'bg-purple-50 text-purple-700'
+                        : currentUser.role === 'STAFF'
+                        ? 'bg-blue-50 text-blue-700'
+                        : 'bg-emerald-50 text-emerald-700'
+                    }`}
+                  >
+                    {currentUser.role}
+                  </span>
+                  <ChevronDown className="h-3 w-3 text-slate-400" />
+                </button>
+
+                {/* Dropdown Menu */}
+                {isUserMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-56 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg z-50">
+                    <div className="px-3 py-2 border-b border-slate-100">
+                      <div className="text-xs font-semibold text-slate-900">{currentUser.name}</div>
+                      <div className="text-[11px] text-slate-500 truncate">{currentUser.email}</div>
+                    </div>
+
+                    <div className="py-1">
+                      <button
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          onSelectView('activity');
+                        }}
+                        className="w-full text-left flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs text-slate-700 hover:bg-slate-100 transition"
+                      >
+                        <FileText className="h-3.5 w-3.5 text-slate-400" />
+                        <span>My Reports &amp; Claims</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          onOpenSignIn();
+                        }}
+                        className="w-full text-left flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs text-slate-700 hover:bg-slate-100 transition"
+                      >
+                        <UserIcon className="h-3.5 w-3.5 text-slate-400" />
+                        <span>Switch Account</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          onOpenSystemTools();
+                        }}
+                        className="w-full text-left flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs text-slate-700 hover:bg-slate-100 transition lg:hidden"
+                      >
+                        <Terminal className="h-3.5 w-3.5 text-slate-400" />
+                        <span>Database Tools</span>
+                      </button>
+                    </div>
+
+                    <div className="pt-1 border-t border-slate-100">
+                      <button
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          onSignOut();
+                        }}
+                        className="w-full text-left flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs text-rose-600 hover:bg-rose-50 transition"
+                      >
+                        <LogOut className="h-3.5 w-3.5" />
+                        <span>Sign Out</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button
+                onClick={onOpenSignIn}
+                className="inline-flex items-center space-x-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition"
+              >
+                <span>Sign In</span>
+              </button>
+            )}
           </div>
         </div>
-      </div>
 
-      {/* Success Notification Bar */}
-      {resetMessage && (
-        <div className="bg-emerald-50 border-t border-emerald-200 px-4 py-2 flex items-center justify-center space-x-2 text-xs font-medium text-emerald-800">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-          <span>{resetMessage}</span>
+        {/* Mobile Sub-Navigation Bar */}
+        <div className="flex md:hidden border-t border-slate-100 py-2 space-x-1 overflow-x-auto">
+          <button
+            onClick={() => onSelectView('browse')}
+            className={`flex items-center space-x-1.5 px-3 py-1 rounded-md text-xs font-medium whitespace-nowrap ${
+              currentView === 'browse'
+                ? 'bg-slate-900 text-white'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <Compass className="h-3.5 w-3.5" />
+            <span>Browse</span>
+          </button>
+
+          <button
+            onClick={() => onSelectView('activity')}
+            className={`flex items-center space-x-1.5 px-3 py-1 rounded-md text-xs font-medium whitespace-nowrap ${
+              currentView === 'activity'
+                ? 'bg-slate-900 text-white'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <FileText className="h-3.5 w-3.5" />
+            <span>My Activity</span>
+          </button>
+
+          {isStaffOrAdmin && (
+            <button
+              onClick={() => onSelectView('claims')}
+              className={`flex items-center space-x-1.5 px-3 py-1 rounded-md text-xs font-medium whitespace-nowrap ${
+                currentView === 'claims'
+                  ? 'bg-slate-900 text-white'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <ClipboardCheck className="h-3.5 w-3.5" />
+              <span>Review Claims</span>
+              {pendingClaimsCount > 0 && (
+                <span className="ml-1 text-[10px] px-1.5 rounded-full bg-slate-200 text-slate-800">
+                  {pendingClaimsCount}
+                </span>
+              )}
+            </button>
+          )}
+
+          <button
+            onClick={onOpenSystemTools}
+            className="flex items-center space-x-1 px-3 py-1 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 whitespace-nowrap"
+          >
+            <Terminal className="h-3.5 w-3.5" />
+            <span>DB Tools</span>
+          </button>
         </div>
-      )}
+      </div>
     </header>
   );
 }

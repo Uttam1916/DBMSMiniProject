@@ -1,62 +1,84 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import Header from '@/components/Header';
-import Navigation, { TabType } from '@/components/Navigation';
-import DashboardTab from '@/components/DashboardTab';
-import ItemsTab from '@/components/ItemsTab';
-import SemanticSearchTab from '@/components/SemanticSearchTab';
-import ClaimsTab from '@/components/ClaimsTab';
-import SqlConsoleTab from '@/components/SqlConsoleTab';
-import SchemaTab from '@/components/SchemaTab';
-import ReportItemModal from '@/components/ReportItemModal';
+import Header, { MainNavView } from '@/components/Header';
+import BrowseView from '@/components/BrowseView';
+import MyActivityView from '@/components/MyActivityView';
+import ClaimsReviewView from '@/components/ClaimsReviewView';
 import ItemDetailModal from '@/components/ItemDetailModal';
+import ReportItemModal from '@/components/ReportItemModal';
 import FileClaimModal from '@/components/FileClaimModal';
-import { User, Category, Location, Item, ItemMatch, Claim } from '@/types';
+import SignInModal from '@/components/SignInModal';
+import SystemToolsModal from '@/components/SystemToolsModal';
+import { User, Category, Location, Item, Claim } from '@/types';
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [currentView, setCurrentView] = useState<MainNavView>('browse');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [items, setItems] = useState<Item[]>([]);
-  const [matches, setMatches] = useState<ItemMatch[]>([]);
   const [claims, setClaims] = useState<Claim[]>([]);
-  const [analytics, setAnalytics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   // Modals state
+  const [isSignInOpen, setIsSignInOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isSystemToolsOpen, setIsSystemToolsOpen] = useState(false);
   const [selectedItemForDetail, setSelectedItemForDetail] = useState<Item | null>(null);
-  const [itemForClaimModal, setItemForClaimModal] = useState<Item | null>(null);
+  const [targetItemForClaim, setTargetItemForClaim] = useState<{
+    item_id: number;
+    title: string;
+    location_name: string;
+  } | null>(null);
+
+  // Load user session from localStorage or default
+  useEffect(() => {
+    const savedUserId = localStorage.getItem('campus_lf_user_id');
+    if (savedUserId && users.length > 0) {
+      const found = users.find((u) => u.user_id === Number(savedUserId));
+      if (found) setCurrentUser(found);
+    }
+  }, [users]);
+
+  // Handle user selection
+  const handleSelectUser = (user: User) => {
+    setCurrentUser(user);
+    localStorage.setItem('campus_lf_user_id', String(user.user_id));
+  };
+
+  const handleSignOut = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('campus_lf_user_id');
+    if (currentView === 'claims') {
+      setCurrentView('browse');
+    }
+  };
 
   // Fetch all initial data
   const refreshAll = useCallback(async () => {
     try {
-      const [metaRes, itemsRes, matchesRes, claimsRes, analyticsRes] = await Promise.all([
+      const [metaRes, itemsRes, claimsRes] = await Promise.all([
         fetch('/api/meta').then((r) => r.json()),
         fetch('/api/items').then((r) => r.json()),
-        fetch('/api/matches').then((r) => r.json()),
         fetch('/api/claims').then((r) => r.json()),
-        fetch('/api/analytics').then((r) => r.json()),
       ]);
 
       if (metaRes.users) {
         setUsers(metaRes.users);
-        if (!currentUser && metaRes.users.length > 0) {
-          // Default to Student or Admin
+        if (!currentUser && !localStorage.getItem('campus_lf_user_id') && metaRes.users.length > 0) {
+          // Default to Demo Student on initial load
           setCurrentUser(metaRes.users[0]);
+          localStorage.setItem('campus_lf_user_id', String(metaRes.users[0].user_id));
         }
       }
       if (metaRes.categories) setCategories(metaRes.categories);
       if (metaRes.locations) setLocations(metaRes.locations);
       if (itemsRes.items) setItems(itemsRes.items);
-      if (matchesRes.matches) setMatches(matchesRes.matches);
       if (claimsRes.claims) setClaims(claimsRes.claims);
-      if (analyticsRes) setAnalytics(analyticsRes);
     } catch (err) {
-      console.error('Error refreshing app data:', err);
+      console.error('Error refreshing campus data:', err);
     } finally {
       setLoading(false);
     }
@@ -65,16 +87,6 @@ export default function Home() {
   useEffect(() => {
     refreshAll();
   }, [refreshAll]);
-
-  // Handler for resetting database back to clean baseline state
-  const handleResetDatabase = async () => {
-    const res = await fetch('/api/demo/reset', { method: 'POST' });
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.error || 'Failed to reset database');
-    }
-    await refreshAll();
-  };
 
   // Handler for claim status update (Trigger & Transaction demonstration with RBAC)
   const handleUpdateClaimStatus = async (
@@ -102,7 +114,7 @@ export default function Home() {
 
   // Handler for deleting an item (DML demonstration)
   const handleDeleteItem = async (itemId: number) => {
-    if (!confirm(`Delete item #${itemId}? This demonstrates relational CASCADE delete on item_match.`)) {
+    if (!confirm(`Delete item #${itemId}? This will delete the item and its candidate matches.`)) {
       return;
     }
     try {
@@ -117,96 +129,85 @@ export default function Home() {
     }
   };
 
-  // Handler for recomputing embeddings and matches
-  const handleRefreshMatches = async () => {
-    const res = await fetch('/api/matches', { method: 'POST' });
+  // Handler for resetting database back to clean baseline state
+  const handleResetDatabase = async () => {
+    const res = await fetch('/api/demo/reset', { method: 'POST' });
     const data = await res.json();
     if (!res.ok) {
-      throw new Error(data.error || 'Failed to refresh matches');
+      throw new Error(data.error || 'Failed to reset database');
     }
     await refreshAll();
   };
 
   const pendingClaimsCount = claims.filter((c) => c.claim_status === 'PENDING').length;
+  const userReportsCount = currentUser ? items.filter((i) => i.reporter_id === currentUser.user_id).length : 0;
+  const userClaimsCount = currentUser ? claims.filter((c) => c.claimant_id === currentUser.user_id).length : 0;
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
-      {/* Top Application Header */}
+    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
+      {/* Header & Navigation */}
       <Header
+        currentView={currentView}
+        onSelectView={setCurrentView}
         currentUser={currentUser}
-        users={users}
-        onSelectUser={setCurrentUser}
-        onResetDatabase={handleResetDatabase}
-      />
-
-      {/* Main Tab Navigation */}
-      <Navigation
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onSignOut={handleSignOut}
+        onOpenSignIn={() => setIsSignInOpen(true)}
+        onOpenReportModal={() => {
+          if (!currentUser) {
+            setIsSignInOpen(true);
+          } else {
+            setIsReportModalOpen(true);
+          }
+        }}
+        onOpenSystemTools={() => setIsSystemToolsOpen(true)}
         pendingClaimsCount={pendingClaimsCount}
-        matchesCount={matches.length}
+        userReportsCount={userReportsCount}
+        userClaimsCount={userClaimsCount}
       />
 
-      {/* Main Content Area */}
+      {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {loading ? (
-          <div className="flex flex-col items-center justify-center min-h-[400px] text-slate-400">
-            <div className="w-8 h-8 border-2 border-slate-300 border-t-indigo-600 rounded-full animate-spin mb-3" />
-            <p className="text-sm font-medium">Connecting to PostgreSQL &amp; pgvector...</p>
-          </div>
-        ) : (
-          <>
-            {activeTab === 'overview' && (
-              <DashboardTab
-                analytics={analytics}
-                onNavigate={setActiveTab}
-                onOpenReportModal={() => setIsReportModalOpen(true)}
-              />
-            )}
+        {currentView === 'browse' && (
+          <BrowseView
+            items={items}
+            categories={categories}
+            locations={locations}
+            currentUser={currentUser}
+            onSelectItem={setSelectedItemForDetail}
+            onOpenReportModal={() => {
+              if (!currentUser) setIsSignInOpen(true);
+              else setIsReportModalOpen(true);
+            }}
+            onDeleteItem={handleDeleteItem}
+            loading={loading}
+          />
+        )}
 
-            {activeTab === 'items' && (
-              <ItemsTab
-                items={items}
-                categories={categories}
-                locations={locations}
-                currentUser={currentUser}
-                onOpenReportModal={() => setIsReportModalOpen(true)}
-                onSelectItem={setSelectedItemForDetail}
-                onOpenFileClaimModal={setItemForClaimModal}
-                onDeleteItem={handleDeleteItem}
-                onRefresh={refreshAll}
-              />
-            )}
+        {currentView === 'activity' && (
+          <MyActivityView
+            currentUser={currentUser}
+            items={items}
+            claims={claims}
+            onSelectItem={setSelectedItemForDetail}
+            onOpenReportModal={() => {
+              if (!currentUser) setIsSignInOpen(true);
+              else setIsReportModalOpen(true);
+            }}
+            onOpenSignIn={() => setIsSignInOpen(true)}
+          />
+        )}
 
-            {activeTab === 'search' && (
-              <SemanticSearchTab
-                matches={matches}
-                onRefreshMatches={handleRefreshMatches}
-                onSelectItemById={(id) => {
-                  const it = items.find((i) => i.item_id === id);
-                  if (it) setSelectedItemForDetail(it);
-                }}
-              />
-            )}
-
-            {activeTab === 'claims' && (
-              <ClaimsTab
-                claims={claims}
-                currentUser={currentUser}
-                onUpdateClaimStatus={handleUpdateClaimStatus}
-                onOpenFileClaimModal={setItemForClaimModal}
-                onRefresh={refreshAll}
-              />
-            )}
-
-            {activeTab === 'sql' && <SqlConsoleTab />}
-
-            {activeTab === 'schema' && <SchemaTab />}
-          </>
+        {currentView === 'claims' && (
+          <ClaimsReviewView
+            claims={claims}
+            currentUser={currentUser}
+            onUpdateClaimStatus={handleUpdateClaimStatus}
+            onRefresh={refreshAll}
+          />
         )}
       </main>
 
-      {/* Report Item Modal */}
+      {/* Modals */}
       <ReportItemModal
         isOpen={isReportModalOpen}
         onClose={() => setIsReportModalOpen(false)}
@@ -214,42 +215,65 @@ export default function Home() {
         locations={locations}
         currentUser={currentUser}
         onSuccess={refreshAll}
+        onOpenSignIn={() => {
+          setIsReportModalOpen(false);
+          setIsSignInOpen(true);
+        }}
       />
 
-      {/* Item Detail & Matches Modal */}
       <ItemDetailModal
         item={selectedItemForDetail}
         onClose={() => setSelectedItemForDetail(null)}
         currentUser={currentUser}
-        onOpenFileClaimModal={(it) => {
+        onOpenFileClaimModal={(target) => {
           setSelectedItemForDetail(null);
-          setItemForClaimModal(it);
+          setTargetItemForClaim(target);
+        }}
+        onUpdateClaimStatus={handleUpdateClaimStatus}
+        onRefresh={refreshAll}
+      />
+
+      <FileClaimModal
+        item={targetItemForClaim}
+        currentUser={currentUser}
+        isOpen={!!targetItemForClaim}
+        onClose={() => setTargetItemForClaim(null)}
+        onSuccess={refreshAll}
+        onOpenSignIn={() => {
+          setTargetItemForClaim(null);
+          setIsSignInOpen(true);
         }}
       />
 
-      {/* File Claim Modal */}
-      <FileClaimModal
-        item={itemForClaimModal}
+      <SignInModal
+        isOpen={isSignInOpen}
+        onClose={() => setIsSignInOpen(false)}
+        users={users}
         currentUser={currentUser}
-        isOpen={!!itemForClaimModal}
-        onClose={() => setItemForClaimModal(null)}
-        onSuccess={refreshAll}
+        onSelectUser={handleSelectUser}
       />
 
-      {/* Clean Institutional Footer */}
-      <footer className="mt-auto border-t border-slate-200 bg-white py-4 text-center text-xs text-slate-500">
+      <SystemToolsModal
+        isOpen={isSystemToolsOpen}
+        onClose={() => setIsSystemToolsOpen(false)}
+        onResetDatabase={handleResetDatabase}
+      />
+
+      {/* Restrained Institutional Footer */}
+      <footer className="border-t border-slate-200 bg-white py-4 text-xs text-slate-500 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
           <div>
-            <span className="font-semibold text-slate-700">Campus Lost-and-Found Matching System</span> — DBMS Experiential Learning Project (Level 3)
+            <span className="font-semibold text-slate-700">Campus Lost &amp; Found Registry</span> — University Central Operations
           </div>
-          <div className="flex items-center space-x-3 text-slate-400">
-            <span>PostgreSQL 16</span>
+          <div className="flex items-center space-x-3 text-slate-400 text-[11px]">
+            <span>PostgreSQL 16 + pgvector</span>
             <span>•</span>
-            <span>pgvector HNSW</span>
-            <span>•</span>
-            <span>FastEmbed</span>
-            <span>•</span>
-            <span>Next.js App Router</span>
+            <button
+              onClick={() => setIsSystemToolsOpen(true)}
+              className="text-slate-500 hover:text-slate-800 underline transition"
+            >
+              Evaluation &amp; Database Tools
+            </button>
           </div>
         </div>
       </footer>

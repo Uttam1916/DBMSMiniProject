@@ -1,15 +1,20 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Item, User } from '@/types';
-import { X, ShieldCheck, AlertCircle, FileCheck } from 'lucide-react';
+import { User } from '@/types';
+import { X, AlertCircle } from 'lucide-react';
 
 interface FileClaimModalProps {
-  item: Item | null;
+  item: {
+    item_id: number;
+    title: string;
+    location_name: string;
+  } | null;
   currentUser: User | null;
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  onOpenSignIn?: () => void;
 }
 
 export default function FileClaimModal({
@@ -18,25 +23,27 @@ export default function FileClaimModal({
   isOpen,
   onClose,
   onSuccess,
+  onOpenSignIn,
 }: FileClaimModalProps) {
   const [proofDetails, setProofDetails] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen || !item) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!proofDetails.trim()) {
-      setError('Please provide proof of ownership.');
-      return;
-    }
     if (!currentUser) {
-      setError('No active user selected.');
+      setError('Please sign in before submitting an ownership claim.');
       return;
     }
 
-    setIsSubmitting(true);
+    if (!proofDetails.trim()) {
+      setError('Please provide identifying details or proof of ownership.');
+      return;
+    }
+
+    setLoading(true);
     setError(null);
 
     try {
@@ -52,106 +59,106 @@ export default function FileClaimModal({
 
       const data = await res.json();
       if (!res.ok) {
-        // Expose database trigger exception
         throw new Error(data.details || data.error || 'Failed to submit claim');
       }
 
+      setProofDetails('');
       onSuccess();
       onClose();
-      setProofDetails('');
     } catch (err: any) {
       setError(err.message);
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl border border-slate-200 shadow-xl max-w-lg w-full overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 overflow-y-auto">
+      <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white shadow-xl my-auto">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <FileCheck className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-slate-900">
-                File Ownership Claim
-              </h3>
-              <p className="text-xs text-slate-500">
-                Claiming Found Item #{item.item_id}: {item.title}
-              </p>
-            </div>
+        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">Submit Ownership Claim</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Claiming: <strong className="text-slate-800">{item.title}</strong> (Found at {item.location_name})
+            </p>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 rounded-lg p-1"
+            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
+            aria-label="Close"
           >
-            <X className="w-5 h-5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 text-xs sm:text-sm">
           {error && (
-            <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center space-x-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <div>
-                <span className="font-semibold block">Validation Error:</span>
-                <span>{error}</span>
-              </div>
+            <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 flex items-start space-x-2">
+              <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+              <span>{error}</span>
             </div>
           )}
 
-          {/* Item Context */}
-          <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs space-y-1">
-            <div className="font-semibold text-slate-800">{item.title}</div>
-            <div className="text-slate-500 line-clamp-2">{item.description}</div>
-            <div className="text-slate-400 text-[11px] pt-1">
-              Found at: {item.location_name} • Category: {item.category_name}
+          {!currentUser && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 flex items-center justify-between">
+              <span>You must be signed in to submit an ownership claim.</span>
+              {onOpenSignIn && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenSignIn();
+                  }}
+                  className="rounded bg-amber-800 px-2.5 py-1 text-white font-medium hover:bg-amber-900 transition"
+                >
+                  Sign In
+                </button>
+              )}
             </div>
-          </div>
+          )}
 
-          {/* Proof Details Input */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Proof of Ownership *
+            <label htmlFor="proof-details" className="text-xs font-medium text-slate-700 block mb-1">
+              Identifying Proof &amp; Verification Details <span className="text-rose-500">*</span>
             </label>
             <textarea
-              required
+              id="proof-details"
               rows={4}
-              placeholder="State unique identifying details not visible in public listing (e.g. serial numbers, inner tags, passcode, distinct scratches, sticker details)..."
+              required
+              placeholder="Describe distinguishing details only the owner would know: brand, serial number, stickers, phone wallpaper, internal contents, purchase date, or time of loss..."
               value={proofDetails}
               onChange={(e) => setProofDetails(e.target.value)}
-              className="w-full px-3 py-2 text-xs sm:text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs sm:text-sm text-slate-900 focus:border-slate-400 focus:outline-none transition"
             />
-            <p className="text-[11px] text-slate-400 mt-1">
-              Database trigger <code className="font-mono text-indigo-600">trg_validate_claim_item</code> verifies that this item is OPEN and FOUND before persisting.
+            <p className="text-[11px] text-slate-500 mt-1">
+              Campus security staff inspects these details before approving claim status.
             </p>
           </div>
 
-          {/* Claimant Attribution */}
-          <div className="text-xs text-slate-600">
-            Filing as: <span className="font-semibold text-slate-900">{currentUser?.name}</span> ({currentUser?.email})
-          </div>
+          {currentUser && (
+            <div className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-[11px] text-slate-600 space-y-0.5">
+              <div>Claimant: <strong className="text-slate-800">{currentUser.name}</strong></div>
+              <div>University Email: <strong className="text-slate-800">{currentUser.email}</strong></div>
+              <div>Role: <strong className="text-slate-800">{currentUser.role}</strong></div>
+            </div>
+          )}
 
-          {/* Actions */}
-          <div className="pt-2 flex items-center justify-end space-x-2">
+          <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-200">
             <button
               type="button"
               onClick={onClose}
-              disabled={isSubmitting}
-              className="px-4 py-2 text-xs font-medium rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50"
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
-              className="px-4 py-2 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm disabled:opacity-50"
+              disabled={loading || !currentUser}
+              className="rounded-lg bg-slate-900 px-4 py-2 text-xs font-medium text-white hover:bg-slate-800 transition disabled:opacity-50"
             >
-              {isSubmitting ? 'Submitting Claim...' : 'Submit Ownership Claim'}
+              {loading ? 'Submitting Claim...' : 'Submit Ownership Claim'}
             </button>
           </div>
         </form>

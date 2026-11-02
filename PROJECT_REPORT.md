@@ -25,13 +25,13 @@
 
 # 2. Abstract
 
-Traditional university campus lost-and-found operations face significant logistical inefficiencies stemming from vocabulary mismatch, lack of automated correlation, and weak ownership verification. A student reporting a lost *"black stainless-steel bottle"* frequently fails to locate a finder's entry for a *"dark metal water bottle"* when relying on standard keyword or SQL `ILIKE` pattern queries. Furthermore, paper logs or naive CRUD applications lack transactional atomicity, leading to race conditions and multiple inconsistent claims on identical belongings.
+Campus lost-and-found operations typically suffer from vocabulary mismatch, manual record-keeping, and weak ownership verification. A student reporting a lost *"black stainless-steel bottle"* will not match a finder's record for a *"dark metal water bottle"* under standard keyword or SQL `ILIKE` pattern queries. Furthermore, traditional applications lack transactional concurrency control, allowing multiple conflicting claims on the same item.
 
-This project delivers a **DBMS Level 3 Experiential Learning System** that bridges relational rigor with modern vector database search. Implemented using **PostgreSQL 16** with the **pgvector** extension and dense text embeddings (`sentence-transformers/all-MiniLM-L6-v2`, 384 dimensions), the application delivers:
-1. **Semantic Vector Matching**: Maps natural language descriptions into 384-dimensional Euclidean space and performs nearest-neighbor discovery via cosine distance (`<=>`), indexed with a Hierarchical Navigable Small World (**HNSW**) vector index.
-2. **ACID Transaction & Trigger Auto-Synchronization**: Manages ownership claims through explicit transactions with row-level locking (`FOR UPDATE`). When staff approves a claim, database trigger `sync_item_status_after_claim` automatically mutates item status from `OPEN` to `CLAIMED` in the same transaction.
-3. **Advanced DBMS Capabilities**: Features 3 PL/pgSQL triggers, 2 database views, a PL/pgSQL stored function (`find_matching_items`), multi-table 4-way joins, nested subqueries, correlated subqueries with `EXISTS`, Common Table Expressions (CTEs), and a recursive CTE (`WITH RECURSIVE`) traversing a multi-tier campus zone hierarchy.
-4. **Institutional Next.js Interface**: Provides a web application featuring live side-by-side semantic vs keyword search comparisons, role switching for Students, Staff, and Administrators, an interactive SQL runner with millisecond profiling, and schema inspection.
+This project implements a practical **DBMS Level 3 Experiential Learning System** combining relational integrity with vector similarity search in a single engine. Built with **PostgreSQL 16**, the **pgvector** extension, and dense text embeddings (`sentence-transformers/all-MiniLM-L6-v2`, 384 dimensions), the application provides:
+1. **Semantic Vector Matching**: Maps natural language descriptions into 384-dimensional Euclidean space. Nearest-neighbor searches use cosine distance (`<=>`) backed by a Hierarchical Navigable Small World (**HNSW**) vector index. Potential matches are surfaced directly inside the lost item's detail view.
+2. **ACID Transactions & Trigger Synchronization**: Manages claim adjudication using explicit database transactions with row-level locks (`FOR UPDATE`). When staff approves a claim, database trigger `sync_item_status_after_claim` automatically updates the item's status from `OPEN` to `CLAIMED` within the same transaction.
+3. **Advanced SQL Concepts**: Features 3 PL/pgSQL triggers, 2 database views, a PL/pgSQL stored function (`find_matching_items`), 4-way joins, nested subqueries, correlated subqueries with `EXISTS`, Common Table Expressions (CTEs), and a recursive CTE (`WITH RECURSIVE`) traversing a campus zone hierarchy.
+4. **Campus Web Application**: Next.js interface providing item browsing, multi-criteria filtering (category, location, date, type), item reporting with on-the-fly vectorization, ownership claim filing with proof, staff claim adjudication, and an evaluation console with millisecond query profiling.
 
 ---
 
@@ -42,14 +42,14 @@ This project delivers a **DBMS Level 3 Experiential Learning System** that bridg
 ```
 ┌────────────────────────────────────────────────────────┐
 │                   Next.js Web Client                   │
-│   (Dashboard, Items Directory, Semantic Search,        │
-│    Claims Management, SQL Console, Schema Inspector)   │
+│   (Browse Items, My Activity, Claims Review,           │
+│    Item Details with Matches, Report & Claim Modals)   │
 └───────────────────────────┬────────────────────────────┘
                             │ HTTP / JSON
 ┌───────────────────────────▼────────────────────────────┐
 │              Next.js Route Handlers (API)              │
 │   /api/items, /api/claims, /api/search/semantic,       │
-│   /api/queries/run, /api/analytics, /api/demo/reset    │
+│   /api/queries/run, /api/meta, /api/demo/reset         │
 └─────────────┬────────────────────────────┬─────────────┘
               │ Subprocess / CLI           │ Pool Client
 ┌─────────────▼─────────────┐   ┌──────────▼─────────────┐
@@ -64,32 +64,32 @@ This project delivers a **DBMS Level 3 Experiential Learning System** that bridg
                                 └────────────────────────┘
 ```
 
-- **Frontend & Application Layer**: Next.js 14 (React 18, App Router, TypeScript, Tailwind CSS, Lucide Icons).
-- **Backend / API**: Next.js API Route Handlers with direct connection pooling via `pg` (node-postgres).
-- **Primary Relational & Vector Database**: PostgreSQL 16 with native `pgvector` extension.
-- **Embedding Model**: FastEmbed CPU runtime executing `sentence-transformers/all-MiniLM-L6-v2` generating 384-dimensional dense vectors.
+- **Frontend**: Next.js 14 (App Router, TypeScript, Tailwind CSS, Lucide Icons).
+- **Backend / API**: Next.js Route Handlers with direct connection pooling via `pg` (`node-postgres`).
+- **Database Engine**: PostgreSQL 16 with native `pgvector` extension.
+- **Embedding Model**: FastEmbed CPU runtime running `sentence-transformers/all-MiniLM-L6-v2` (384-dimensional dense vectors).
 - **Containerization**: Docker (`pgvector/pgvector:pg16`).
-- **Version Control**: Git & GitHub repository.
+- **Version Control**: Git & GitHub.
 
 ### 3.2 Technology Justification Matrix
 
-| Architectural Criterion | Traditional Relational (MySQL) | NoSQL Document (MongoDB) | Dedicated Vector DB (Pinecone / Chroma) | **Chosen Hybrid: PostgreSQL 16 + pgvector** |
+| Requirement | Relational Only (MySQL) | Document NoSQL (MongoDB) | Dedicated Vector DB (Pinecone / Chroma) | **Chosen: PostgreSQL 16 + pgvector** |
 | :--- | :--- | :--- | :--- | :--- |
-| **Strict Referential Integrity** | High (Foreign Keys, Cascade/Restrict) | Low (Application-layer validation only) | None (Key-value only) | **Highest (Foreign Keys, Cascade/Restrict, Engine-Level Checks)** |
-| **ACID Concurrency on Claims** | Fully Supported | Document-level only; multi-doc slow | Not supported | **Native Row-Level Locking (`FOR UPDATE`) & Atomic Blocks** |
-| **Dense Vector Similarity Search** | Unsupported / Primitive | Requires external Atlas Search | Supported | **Native `vector(384)` with HNSW index inside query engine** |
-| **Data Synchronization Latency** | N/A | High (dual sync between DBs) | High (dual sync drift risks) | **Zero (Vectors reside directly within the `item` row)** |
+| **Referential Integrity** | High (Foreign Keys, Cascade/Restrict) | Low (Application-level enforcement) | None (Key-value only) | **Highest (Foreign Keys, Cascade/Restrict, Engine-Level Checks)** |
+| **ACID Concurrency on Claims** | Supported | Document-level only; multi-doc slow | Not supported | **Native Row-Level Locking (`FOR UPDATE`) & Atomic Blocks** |
+| **Vector Similarity Search** | Unsupported / Primitive | Requires external Atlas Search | Supported | **Native `vector(384)` with HNSW index inside query engine** |
+| **Data Sync Latency** | N/A | High (dual sync between DBs) | High (dual sync drift risks) | **Zero (Vectors reside directly within the `item` row)** |
 | **Complex Joins, Views & CTEs** | Supported | Pipeline aggregations complex | Unsupported | **Native 4-way Joins, Views, CTEs, and Recursive Queries** |
 | **Operational Overhead** | Medium (1 engine) | Medium (1 engine) | High (2 disparate databases to manage) | **Lowest (Single containerized PostgreSQL engine)** |
 
 **Justification Summary:**  
-Campus lost-and-found management requires relational integrity (guaranteeing that claims reference valid items and users cannot have duplicate emails) and transactional locking during claim adjudication. Simultaneously, solving vocabulary mismatch requires dense vector representations. Selecting **PostgreSQL 16 with pgvector** unifies relational ACID safety and vector indexing in a single operational engine.
+Campus lost-and-found management requires relational integrity (guaranteeing that claims reference valid items and users cannot have duplicate emails) and transactional locking during claim adjudication. Simultaneously, solving vocabulary mismatch requires dense vector representations. Selecting **PostgreSQL 16 with pgvector** unifies relational ACID safety and vector indexing in a single operational engine without synchronization drift between two separate databases.
 
 ---
 
 # 4. SQL - Database Commands
 
-### 4.1 Database Design: Entity-Relationship (ER) Diagram
+### 4.1 Entity-Relationship (ER) Diagram
 
 The ER diagram defines 6 core entities: `USERS`, `CATEGORY`, `LOCATION`, `ITEM`, `ITEM_MATCH`, and `CLAIM`.
 
@@ -153,13 +153,13 @@ CLAIM (
 );
 ```
 
-### 4.3 DDL Implementation & Constraint Enforcement
+### 4.3 DDL Implementation & Constraints
 
 ```sql
 -- DDL ALTER Demonstration: Expand title capacity as taxonomy requirements evolved
 ALTER TABLE item ALTER COLUMN title TYPE VARCHAR(200);
 
--- B-Tree and Partial Unique Indexes
+-- Indexes for relational filtering and foreign key joins
 CREATE INDEX idx_item_type_status ON item(item_type, status);
 CREATE INDEX idx_item_reported_by ON item(reported_by);
 CREATE INDEX idx_item_category ON item(category_id);
@@ -175,7 +175,7 @@ CREATE UNIQUE INDEX idx_one_approved_claim_per_item
 
 ### 4.4 Advanced SQL: PL/pgSQL Triggers
 
-#### Trigger 1: Automatic Status Mutation on Claim Adjudication
+#### Trigger 1: Automatic Status Synchronization on Claim Approval
 ```sql
 CREATE OR REPLACE FUNCTION sync_item_status_after_claim()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
@@ -201,7 +201,7 @@ AFTER UPDATE OF claim_status ON claim
 FOR EACH ROW EXECUTE FUNCTION sync_item_status_after_claim();
 ```
 
-#### Trigger 2: Validation of Target Claim Items
+#### Trigger 2: Target Item Validation for Claims
 ```sql
 CREATE OR REPLACE FUNCTION validate_claim_item()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
@@ -336,7 +336,7 @@ WHERE u.email = 'student@campus.edu' AND c.name = 'Personal Items' AND l.name = 
 -- DML UPDATE with status mutation
 UPDATE item SET status = 'RESOLVED' WHERE item_id = 1;
 
--- DML DELETE with RETURNING clause
+-- DML DELETE with RETURNING clause (cascades to item_match)
 DELETE FROM item WHERE title = 'Temporary test umbrella' RETURNING item_id, title;
 
 -- Multi-Table 4-Way Relational JOIN
@@ -554,19 +554,17 @@ DBMSmini/
 │   │   │   └── search/semantic/route.ts # Live side-by-side vector vs keyword search
 │   │   ├── globals.css                  # Custom styling and typography
 │   │   ├── layout.tsx                   # Root HTML structure and metadata
-│   │   └── page.tsx                     # Main client page, tab controller, and role state
+│   │   └── page.tsx                     # Main client page, session management, and routing
 │   ├── components/
-│   │   ├── ClaimsTab.tsx                # Role-based claim approval with ACID trigger banner
-│   │   ├── DashboardTab.tsx             # System health metrics & category aggregation chart
-│   │   ├── FileClaimModal.tsx           # Claim submission modal with trigger validation
-│   │   ├── Header.tsx                   # Top navigation with role switcher & reset button
-│   │   ├── ItemDetailModal.tsx          # Item deep inspector with candidate matches
-│   │   ├── ItemsTab.tsx                 # Full catalog with multi-column filtering
-│   │   ├── Navigation.tsx               # Tab switcher with badge indicators
-│   │   ├── ReportItemModal.tsx          # Item reporting modal with FastEmbed vectorization
-│   │   ├── SchemaTab.tsx                # Visual ER and 3NF schema inspector + dictionary
-│   │   ├── SemanticSearchTab.tsx        # Vector cosine search vs ILIKE side-by-side
-│   │   └── SqlConsoleTab.tsx            # Interactive query runner with execution timing
+│   │   ├── BrowseView.tsx               # Central catalog with multi-column filters & search
+│   │   ├── MyActivityView.tsx           # Student/Staff view of their reported items & claims
+│   │   ├── ClaimsReviewView.tsx         # Staff/Admin claim review queue with proof inspection
+│   │   ├── Header.tsx                   # Top navigation with profile switcher & action button
+│   │   ├── ItemDetailModal.tsx          # Item deep inspector with unconfirmed potential matches
+│   │   ├── ReportItemModal.tsx          # Item submission modal with FastEmbed vectorization
+│   │   ├── FileClaimModal.tsx           # Claim filing modal with trigger validation
+│   │   ├── SignInModal.tsx              # Campus authentication and account switcher
+│   │   └── SystemToolsModal.tsx         # Evaluation console with SQL runner, schema, and reset
 │   ├── lib/
 │   │   ├── db.ts                        # Connection pool singleton (`pg`) with transaction helper
 │   │   └── embed.ts                     # FastEmbed generation wrapper and match refresher
@@ -579,7 +577,7 @@ DBMSmini/
 ### 6.1 Backend API Route Responsibilities
 
 1. **`GET / POST /api/items`**:
-   - `GET`: Supports multi-predicate relational filtering (`type`, `category_id`, `location_id`, `status`, `search`).
+   - `GET`: Supports multi-predicate relational filtering (`type`, `category_id`, `location_id`, `status`, `search`, `reported_by`, `date_filter`).
    - `POST`: Validates inputs, calls `generateTextEmbedding()` to compute a 384-d vector via ONNX, saves item into PostgreSQL, and executes `refreshItemMatches()` to update candidate pairings.
 2. **`PATCH /api/claims/[id]`**:
    - Adjudicates claims inside an explicit `BEGIN ... COMMIT` block.
@@ -607,7 +605,7 @@ DBMSmini/
 - **3NF Relational Schema Model**:
   ![Relational Schema](lost_found_relational_schema.png)
 
-### 7.2 Core Backend Application Code Walkthrough
+### 7.2 Core Application Code Walkthrough
 
 #### 1. ACID Claim Approval with RBAC and Trigger Synchronization (`src/app/api/claims/[id]/route.ts`)
 ```typescript
@@ -688,15 +686,15 @@ const keywordRes = await query(
 
 ### 7.3 Web Application Interface Demonstration
 
-| Tab / View | Key Features Demonstrated | DBMS Level 3 Concept |
+| View / Feature | User Persona | Functional Responsibility & DBMS Concepts |
 | :--- | :--- | :--- |
-| **Header & Role Switcher** | Dynamic toggle between Demo Student (`student@campus.edu`), Demo Staff (`staff@campus.edu`), and Demo Admin (`admin@campus.edu`). "Reset Demo DB" button. | Authentication, Front-end RBAC, and Database User Roles. |
-| **Overview & Dashboard** | Live table counts, vector embeddings status (`384-dim`), active triggers/views health check, and dynamic category distribution chart. | System introspection, Conditional SQL Aggregations (`FILTER`). |
-| **Items Directory** | Catalog with full-text search, type filtering (LOST/FOUND), category, zone, and status filters. "Report Item" modal. | Relational Filtering, Index utilization, DDL constraints, ONNX auto-vectorization on insert. |
-| **Semantic Vector Search** | Natural language tester. Side-by-side comparison showing Cosine Vector Similarity discovering items when `ILIKE` returns 0 matches. | pgvector cosine distance (`<=>`), HNSW index, Semantic vs Keyword comparison. |
-| **Claims & Verification** | Students submit claims with proof; Staff/Admin click Approve or Reject; real-time banner displaying trigger execution and status change to `CLAIMED`. | Explicit ACID Transactions (`BEGIN...COMMIT`), Row-level locking (`FOR UPDATE`), Trigger `sync_item_status_after_claim`. |
-| **SQL Console & TA Demos** | Dropdown with all 11 Level 3 queries, custom read-only runner (supporting `SELECT` and `WITH`), execution profiling in milliseconds. | Recursive CTE, Non-Recursive CTE, Correlated Subqueries, Joins, Stored Procedures, Views. |
-| **Schema Explorer** | Interactive high-resolution viewer for ER diagram and 3NF Relational Schema, complete relational data dictionary. | 3NF Normalization, Referential Integrity, Keys and Domain Constraints. |
+| **Browse Items** | Student / Staff / Admin | Complete searchable catalog of lost and found items. Filters by Item Type (All, Lost, Found), Category, Campus Location, Date range, and Status (`OPEN`, `CLAIMED`, `RESOLVED`). |
+| **Item Details & Potential Matches** | Student / Staff | Shows complete item information. For LOST items, automatically displays candidate matching FOUND items with title, description, location, date, and similarity score (labeled as unconfirmed potential matches), with direct action to claim. |
+| **Report Lost / Found Item** | Student / Staff | Modal form allowing students or staff to report items. On submission, the backend automatically computes a 384-d vector via ONNX FastEmbed and computes candidate pairings in `item_match`. |
+| **Submit Ownership Claim** | Student / Staff | Allows claiming an open found item with identifying proof. Checked by database trigger `validate_claim_item` to ensure claims only target open found items. |
+| **My Activity** | Student / Staff | Displays the signed-in user's personal reported items and submitted claims with real-time approval status and collection instructions. |
+| **Claims Review & Adjudication** | Staff / Admin | Queue for evaluating ownership proof. One-click Approve or Reject button executes an ACID transaction; trigger `sync_item_status_after_claim` mutates item status to `CLAIMED`. |
+| **Database & System Tools** | TA / Evaluator | Discrete evaluation console: executes all 11 Level 3 queries with millisecond profiling, ad-hoc custom SQL runner, high-resolution ER/relational diagrams, and one-click database reset. |
 
 ---
 
@@ -706,7 +704,7 @@ const keywordRes = await query(
 
 | # | Evaluation Rubric | Marks | Completion Status | Detailed Implementation Evidence in Project |
 | :---: | :--- | :---: | :---: | :--- |
-| **1** | **ER Diagram** | **2** | **100% Completed** | Complete Entity-Relationship model (`lost_found_ER.png` and `public/lost_found_ER.png`) modeling entities (`users`, `category`, `location`, `item`, `item_match`, `claim`), primary keys, and cardinalities. Embedded directly in the web app under the "Schema Explorer" tab. |
+| **1** | **ER Diagram** | **2** | **100% Completed** | Complete Entity-Relationship model (`lost_found_ER.png` and `public/lost_found_ER.png`) modeling entities (`users`, `category`, `location`, `item`, `item_match`, `claim`), primary keys, and cardinalities. Embedded directly in the web app under the "Database Tools" modal. |
 | **2** | **Relational schema with keys, relationships, and constraints** | **3** | **100% Completed** | Fully normalized 3NF relational schema (`lost_found_relational_schema.png`). Primary keys, composite primary keys (`item_match`), foreign keys with `ON DELETE RESTRICT` and `ON DELETE CASCADE`, domain `CHECK` constraints (`role`, `status`, `item_type`, `similarity_score`), and `UNIQUE` constraints (`email`, `category.name`, `location.name`). |
 | **3** | **SQL database implementation - DDL with constraints** | **4** | **100% Completed** | Implemented in `campus_lost_found_setup.sql`. Features `CREATE TABLE`, `ALTER TABLE item ALTER COLUMN title TYPE VARCHAR(200);`, `DROP TABLE ... CASCADE;`, composite primary keys, check constraints, default values, HNSW vector index, and partial unique index (`idx_one_approved_claim_per_item`). |
 | **4** | **NoSQL / Vector database creation** | **4** | **100% Completed** | PostgreSQL 16 extended with native `pgvector` (`CREATE EXTENSION IF NOT EXISTS vector;`). High-dimensional dense vector attribute `embedding VECTOR(384)` indexed with an HNSW cosine index (`USING hnsw (embedding vector_cosine_ops)`). |
@@ -715,9 +713,9 @@ const keywordRes = await query(
 | **7** | **Nested / correlated / Recursive Queries, Join SQL queries** | **4** | **100% Completed** | 1. **Multi-Table Join**: 4-way join across `item`, `category`, `location`, `users`.<br>2. **Nested Subquery**: `WHERE user_id IN (SELECT claimed_by FROM claim GROUP BY claimed_by HAVING COUNT(*) >= 1)`.<br>3. **Correlated Subquery**: Scalar subquery referencing outer row with `EXISTS`.<br>4. **Recursive Query**: `WITH RECURSIVE location_hierarchy` computing campus zone paths, depth levels, and aggregate item distribution. |
 | **8** | **Advanced SQL concepts (Procedure/Function, trigger, CTE)** | **6** | **100% Completed** | 1. **Stored PL/pgSQL Function**: `find_matching_items(lost_id, limit)` encapsulating vector cosine math.<br>2. **Triggers (3)**: `sync_item_status_after_claim` (atomic status mutation), `validate_claim_item` (enforces claims on OPEN FOUND items only), `validate_item_match_types` (validates match pair types).<br>3. **CTE**: Multi-stage CTE categorizing match confidence tiers (`HIGH`, `MEDIUM`, `LOW`).<br>4. **Views (2)**: `item_details_view` and `pending_claims_view`.<br>5. **Transactions**: Explicit `BEGIN ... COMMIT` with `FOR UPDATE` row-level locks. |
 | **9** | **NoSQL / Vector feature, CRUD** | **7** | **100% Completed** | Full vector lifecycle: **Create** (384-d FastEmbed generation and vector storage), **Read** (pgvector cosine retrieval `<=>`), **Update** (`refreshItemMatches()` via `CROSS JOIN LATERAL find_matching_items(...)`), **Delete** (automatic cascade deletion), and sub-millisecond HNSW indexing. |
-| **10** | **Next.js interface** | **3** | **100% Completed** | Responsive institutional web application built with Next.js 14 App Router, TypeScript, and Tailwind CSS. Features 6 tabs (Dashboard, Items Directory, Semantic Matcher, Claims Review, SQL Console, Schema Inspector), search filters, and real-time transaction banners. |
-| **11** | **Backend / API and database integration** | **2** | **100% Completed** | Next.js API Route Handlers (`/api/items`, `/api/claims`, `/api/matches`, `/api/queries/run`, `/api/search/semantic`, `/api/analytics`, `/api/demo/reset`) integrated via connection pooling (`node-postgres`). Parameterized queries protect against SQL injection. Environment variables managed in `.env.local`. |
-| **12** | **Authentication implementation & RBAC (Minimum two roles)** | **4** | **100% Completed** | 3 institutional roles (`STUDENT`, `STAFF`, `ADMIN`) validated by database `CHECK (role IN ('STUDENT','STAFF','ADMIN'))` and pgcrypto bcrypt hashes. Frontend role switcher dynamically modifies capabilities; backend API enforces RBAC by blocking students with `403 Forbidden` from claim adjudication. |
+| **10** | **Next.js interface** | **3** | **100% Completed** | Responsive institutional web application built with Next.js 14 App Router, TypeScript, and Tailwind CSS. Features clean browse catalog, personal activity tracking, staff claims adjudication, item detail drawer with potential matches, and system evaluation tools. |
+| **11** | **Backend / API and database integration** | **2** | **100% Completed** | Next.js API Route Handlers (`/api/items`, `/api/claims`, `/api/matches`, `/api/queries/run`, `/api/search/semantic`, `/api/meta`, `/api/demo/reset`) integrated via connection pooling (`node-postgres`). Parameterized queries protect against SQL injection. Environment variables managed in `.env.local`. |
+| **12** | **Authentication implementation & RBAC (Minimum two roles)** | **4** | **100% Completed** | 3 institutional roles (`STUDENT`, `STAFF`, `ADMIN`) validated by database `CHECK (role IN ('STUDENT','STAFF','ADMIN'))` and pgcrypto bcrypt hashes. Frontend session switcher modifies capabilities; backend API enforces RBAC by blocking students with `403 Forbidden` from claim adjudication. |
 | **13** | **Documentation, Git / GitHub** | **2** | **100% Completed** | Clean Git repository structure, meaningful commit history, complete `README.md` with setup and live demonstration steps, and formal `PROJECT_REPORT.md` covering all 8 specified sections. |
 | **14** | **Originality, individual contribution, Modification / Viva** | **4** | **100% Completed** | Solves authentic university lost-and-found vocabulary mismatch problem. Clearly delineated student contributions (Uttam K R: Full-Stack & Vectors; Team Partner: Relational Modeling & Triggers). Includes interactive SQL console ready for ad-hoc examiner queries and live viva modifications. |
 
@@ -727,8 +725,8 @@ const keywordRes = await query(
 
 | Potential Examiner Viva Question / Modification | System Implementation & Defense |
 | :--- | :--- |
-| *"Show me your Recursive Query and explain how it terminates."* | Navigate to SQL Console tab -> Select **Query 4: Recursive Location Hierarchy**. The anchor member selects root zones (`parent_location_id IS NULL`), while the recursive member joins child zones on `parent_location_id = lh.location_id`. It terminates when no more child zones exist in the table. |
-| *"Prove that your database trigger works inside an ACID transaction."* | Navigate to Claims tab -> Switch role to **Staff** or **Admin** -> Click **Approve** on Claim #1. A banner displays: `sync_item_status_after_claim` fired inside `BEGIN...COMMIT`, mutating the item's status from `OPEN` to `CLAIMED`. |
+| *"Show me your Recursive Query and explain how it terminates."* | Open **Database Tools** -> **Evaluation Queries** -> Select **Query 4: Recursive Location Hierarchy**. The anchor member selects root zones (`parent_location_id IS NULL`), while the recursive member joins child zones on `parent_location_id = lh.location_id`. It terminates when no more child zones exist in the table. |
+| *"Prove that your database trigger works inside an ACID transaction."* | In the application, navigate to **Review Claims** (as Staff or Admin) -> Click **Approve** on Claim #1. A transaction banner confirms that `sync_item_status_after_claim` fired inside `BEGIN...COMMIT`, mutating the item's status from `OPEN` to `CLAIMED`. |
 | *"What happens if a student attempts to file a claim on a LOST item?"* | Run Query 13 in the console. The database trigger `validate_claim_item` raises an exception: *"Claims can only be submitted for FOUND items"*, aborting the transaction immediately. |
-| *"How does your vector search outperform keyword matching?"* | Open the **Semantic Search** tab. Search for *"black water bottle with metal cap"*. The vector engine returns *"Dark metal water bottle"* with ~0.74 cosine similarity, while keyword `ILIKE` returns zero matches due to vocabulary mismatch. |
+| *"How does your vector search outperform keyword matching?"* | Open **Database Tools** -> **Semantic vs Keyword Test**. Search for *"black water bottle with metal cap"*. The vector engine returns *"Dark metal water bottle"* with ~0.74 cosine similarity, while keyword `ILIKE` returns zero matches due to vocabulary mismatch. |
 | *"Can two claims for the same item both be approved?"* | No. Partial unique index `CREATE UNIQUE INDEX idx_one_approved_claim_per_item ON claim(item_id) WHERE claim_status = 'APPROVED';` enforces at the database engine level that duplicate approved claims are rejected. |

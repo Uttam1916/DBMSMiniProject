@@ -33,6 +33,7 @@ export interface Item {
   reporter_email: string;
   reporter_role: string;
   claims_count?: number;
+  matches_count?: number;
 }
 
 export interface ItemMatch {

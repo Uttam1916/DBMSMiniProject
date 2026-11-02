@@ -24,14 +24,14 @@
 ```
 ┌────────────────────────────────────────────────────────┐
 │                   Next.js Web Client                   │
-│   (Dashboard, Items Directory, Semantic Matcher,       │
-│    Claims Management, SQL Console, Schema Inspector)   │
+│   (Browse Items, My Activity, Review Claims,           │
+│    Item Details with Potential Matches, Modals)        │
 └───────────────────────────┬────────────────────────────┘
                             │ HTTP / JSON
 ┌───────────────────────────▼────────────────────────────┐
 │              Next.js Route Handlers (API)              │
 │   /api/items, /api/claims, /api/search/semantic,       │
-│   /api/queries/run, /api/analytics, /api/demo/reset    │
+│   /api/queries/run, /api/meta, /api/demo/reset         │
 └─────────────┬────────────────────────────┬─────────────┘
               │ Subprocess / CLI           │ Pool Client
 ┌─────────────▼─────────────┐   ┌──────────▼─────────────┐
@@ -95,87 +95,70 @@ npm run start
 
 Follow this step-by-step demonstration sequence during the final project evaluation with the TA / Instructor:
 
-### Step 1: Header & Role-Based Access Control (RBAC)
-1. Point out the **Institutional Header** displaying the project identity, database paradigm (`PostgreSQL + pgvector`), and system status.
-2. Locate the **Active Role** dropdown in the upper right:
-   - **Demo Student** (`student@campus.edu`): Can report items and file ownership claims.
-   - **Demo Staff** (`staff@campus.edu`): Can review, approve, and reject claims.
-   - **Demo Admin** (`admin@campus.edu`): Full administrative permissions.
-3. Switch between roles to show how UI action controls and API permissions dynamically adapt.
+### Step 1: Institutional Header & Role Authentication
+1. Point out the institutional top navigation header displaying system status and database paradigm (`PostgreSQL 16 + pgvector`).
+2. Demonstrate the user session control in the top right:
+   - Click the user profile button to view the active user and role badge.
+   - Click **"Switch User"** to open the authentication modal.
+   - Switch between **Demo Student** (`student@campus.edu`), **Demo Staff** (`staff@campus.edu`), and **Demo Admin** (`admin@campus.edu`).
+   - Notice that navigation tabs and action permissions adapt dynamically (e.g., the **"Review Claims"** tab is visible to Staff and Admin).
 
-### Step 2: Overview & Analytics Dashboard
-1. Click the **Dashboard** tab.
-2. Review the live system metric cards:
-   - **Total Items** (10 baseline items: 5 Lost, 5 Found).
-   - **Vector Embeddings Status** (10/10 items vectorized with 384 dimensions).
-   - **Indexed Matches** (25 cosine candidate pairings computed).
-   - **Claims Registered** (3 claims).
-3. Point out the **Category Distribution Chart**, dynamically calculated using PostgreSQL conditional aggregation: `COUNT(item_id) FILTER (WHERE item_type = 'LOST')`.
-4. Point out the **Active Database Triggers & Views** health monitor verifying that all 3 triggers and 2 views are active in the database catalog.
-
-### Step 3: Items Directory & On-the-Fly Vectorization
-1. Click the **Items Directory** tab.
-2. Demonstrate real-time multi-predicate filtering:
-   - Filter by **Type** (`LOST` vs `FOUND`).
+### Step 2: Browse Items & Multi-Criteria Filtering
+1. Open the **Browse Items** view.
+2. Demonstrate real-time multi-predicate relational filtering:
+   - Toggle between **All Items**, **Lost Only**, and **Found Only**.
    - Filter by **Category** (`Electronics`, `Bags`, `Stationery`, `Personal Items`).
-   - Filter by **Location Zone** (`Library`, `Cafeteria`, `Block A`).
-3. Click **"Report Item"** to demonstrate dynamic vector insertion:
-   - Select **LOST**, Category: **Personal Items**, Location: **Cafeteria**.
-   - Title: `Blue metallic water flask`.
-   - Description: `Stainless steel insulated bottle with a silver lid`.
-   - Click **Submit**.
-   - Show that within 500ms, the Next.js backend generates a 384-dimensional FastEmbed vector via ONNX, stores it into PostgreSQL `item(embedding)`, and automatically updates `item_match` pairings via `CROSS JOIN LATERAL find_matching_items(...)`!
+   - Filter by **Location** (`Central Library`, `Campus Cafeteria`, `Academic Block A`).
+   - Filter by **Date Reported** (`Any Date`, `Today`, `This Week`, `This Month`).
+   - Filter by **Status** (`All Statuses`, `Open`, `Claimed`, `Resolved`).
+   - Enter search keywords to filter across titles and descriptions in real time.
+3. Note the count badges indicating items with candidate matches.
 
-### Step 4: Semantic Vector Search vs Keyword Search (Vocabulary Mismatch)
-1. Click the **Semantic Matcher** tab.
-2. This tab showcases the core problem solved by our Level 3 project: **Vocabulary Mismatch**.
-3. In the query box, enter:  
-   `"black water bottle with metal cap"`
-4. Click **Run Comparison**.
-5. Observe the side-by-side results:
-   - **Vector Cosine Similarity (pgvector `<=>`)**: Successfully discovers **"Dark metal water bottle"** with a similarity score of **~0.74**, ranking it as the #1 match!
-   - **Traditional Relational Keyword Search (`ILIKE`)**: Returns **0 matches** because none of the words ("black", "bottle", "cap") match the exact phrase "Dark metal water bottle with a silver lid".
-6. Scroll down to review the **Persisted Matches Table** loaded from `item_match` using `DISTINCT ON (lost_item_id)`.
+### Step 3: Item Details & Unconfirmed Potential Matches
+1. Click on any lost item (e.g., *"Black stainless-steel bottle"*).
+2. The item detail modal opens, showing complete item details: category, location, date, reporter email, and status.
+3. Highlight the **Potential Matches** section:
+   - Candidate found items are surfaced directly inside the lost item's details.
+   - For each candidate, the UI displays the matching found item title, description, location, date, and a clean similarity score (e.g., `75% similarity`).
+   - Suggestions are clearly labeled as **Potential Matches (Unconfirmed)** rather than automated assumptions.
+   - A direct **"Claim this found item"** button allows immediate claim initiation.
 
-### Step 5: Ownership Claims, ACID Transactions & Database Triggers
-1. Click the **Claims & Verification** tab.
-2. Note the banner explaining **ACID Transactions + Trigger Auto-Synchronization**.
-3. Set your active role to **Demo Student**:
-   - Notice the **Approve** and **Reject** buttons are disabled with the label *"Staff Only"*.
-4. Switch your active role to **Demo Staff** or **Demo Admin**:
-   - The **Approve** and **Reject** buttons are immediately unlocked.
-5. On Claim #1 (*"I can identify the sticker on the bottle"* for *"Dark metal water bottle"*), click **Approve**:
-   - Watch the live **Transaction Commitment Banner** appear.
-   - Point out that PostgreSQL trigger `sync_item_status_after_claim` automatically transitioned the item status from `OPEN` to `CLAIMED` in the same transaction!
-   - Point out the partial unique index `idx_one_approved_claim_per_item` preventing any other claim for this item from being approved.
-6. Click **Revoke** on the approved claim:
-   - Show that the trigger automatically restores the item status back to `OPEN`.
+### Step 4: Report Lost / Found Item with On-the-Fly Vectorization
+1. Click the primary **"Report Item"** button in the header.
+2. Select whether reporting a **Lost Item** or **Found Item**.
+3. Fill in title, category, campus location, date, and detailed description.
+4. Click **Submit Report**:
+   - The Next.js backend generates a 384-dimensional dense vector via FastEmbed ONNX (`sentence-transformers/all-MiniLM-L6-v2`).
+   - The item is inserted into PostgreSQL `item(embedding)` with the vector attribute.
+   - Candidate pairings in `item_match` are automatically refreshed via `CROSS JOIN LATERAL find_matching_items(...)`.
 
-### Step 6: Interactive SQL Console & TA Demonstration Suite
-1. Click the **SQL Console** tab.
-2. Use the query selector dropdown to execute all key Level 3 queries directly against live PostgreSQL:
-   - **Query 1**: Vector Dimensions & Embeddings (`vector_dims`).
-   - **Query 2**: Stored Function Vector Search (`find_matching_items` with `<=>`).
-   - **Query 3**: Persisted Top Matches (`DISTINCT ON`).
-   - **Query 4**: **Recursive Location Hierarchy (`WITH RECURSIVE`)** traversing the campus zone graph.
-   - **Query 5**: **Common Table Expression (CTE)** categorizing match confidence tiers (`HIGH`, `MEDIUM`, `LOW`).
-   - **Query 6**: **Correlated Subquery with `EXISTS`** identifying items with submitted claims.
-   - **Query 7**: **Nested Subquery with `IN` and `HAVING`**.
-   - **Query 8**: **Multi-Table 4-Way Relational JOIN**.
-   - **Query 9**: **Database Views** (`pending_claims_view` & `item_details_view`).
-   - **Query 10**: Aggregations with `FILTER (WHERE ...)` and `HAVING`.
-   - **Query 11**: System Table Row Counts (`UNION ALL`).
-3. Point out the live **execution time profiling in milliseconds** for each query.
-4. Demonstrate the **Custom Query Runner** by typing any ad-hoc `SELECT` or `WITH` query.
+### Step 5: Student Activity & Ownership Claims with Proof
+1. Switch to the **Demo Student** account.
+2. Click the **"My Activity"** tab.
+3. Review personal records separated into:
+   - **My Reported Items**: Shows all items reported by the logged-in student with live status badges.
+   - **My Claims**: Shows all claims submitted by the student, along with the submitted proof of ownership, approval status, and claim collection instructions.
+4. Click **"Submit a Claim"** on any open found item:
+   - Provide verifiable proof of ownership (e.g., unique serial number, lock screen wallpaper, specific scratches or stickers).
+   - Database trigger `validate_claim_item` ensures claims can only be submitted against open found items.
 
-### Step 7: ER Diagram & Schema Explorer
-1. Click the **Schema Explorer** tab.
-2. Toggle between the high-resolution **Entity-Relationship (ER) Diagram** and the **Relational Schema Diagram**.
-3. Review the complete **Relational Data Dictionary** showing tables, primary keys, foreign keys, cascade rules, and domain constraints.
+### Step 6: Staff Claims Review & ACID Trigger Synchronization
+1. Switch to the **Demo Staff** or **Demo Admin** account.
+2. Click the **"Review Claims"** tab (displays a pending count badge).
+3. The queue displays all pending claims along with the claimant's identity, contact email, and detailed ownership proof.
+4. On Claim #1, click **"Approve Claim"**:
+   - An ACID transaction executes with row-level locking (`FOR UPDATE`).
+   - PostgreSQL trigger `sync_item_status_after_claim` automatically mutates the item status from `OPEN` to `CLAIMED` in the same atomic transaction.
+   - A live transaction commitment banner appears showing `item_status_before: OPEN` -> `item_status_after: CLAIMED`.
+   - The database partial unique index `idx_one_approved_claim_per_item` ensures no conflicting claim can ever be approved for this item.
 
-### Step 8: One-Click Demo Reset
-1. In the header, click **"Reset Demo DB"** and confirm.
-2. In 1 second, the database is restored back to the clean baseline state (10 items, all set to `OPEN`, baseline claims restored), ready for another demonstration!
+### Step 7: Database & System Tools Evaluation Modal
+1. Click the discreet **"Database Tools"** link in the header.
+2. This modal contains the technical evaluation instruments for examiners:
+   - **Interactive SQL Console**: Execute all 11 Level 3 demonstration queries directly against live PostgreSQL with millisecond execution profiling. Run custom ad-hoc `SELECT` queries.
+   - **Semantic vs Keyword Comparison**: Enter test queries (e.g., *"black water bottle with metal cap"*) to demonstrate how vector cosine similarity finds *"Dark metal water bottle"* (~0.75 score) where relational `ILIKE` returns 0 results due to vocabulary mismatch.
+   - **ER & Relational Schemas**: High-resolution interactive view of the ER Diagram and 3NF Relational Schema.
+   - **One-Click Demo Reset**: Restore the database to its pristine baseline state in 1 second.
 
 ---
 
@@ -273,19 +256,17 @@ DBMSmini/
 │   │   │   └── search/semantic/route.ts # Live side-by-side vector vs keyword search
 │   │   ├── globals.css                  # Custom styling and typography
 │   │   ├── layout.tsx                   # Root HTML structure and metadata
-│   │   └── page.tsx                     # Main client page, tab controller, and role state
+│   │   └── page.tsx                     # Main client page, session management, and routing
 │   ├── components/
-│   │   ├── ClaimsTab.tsx                # Role-based claim approval with ACID trigger banner
-│   │   ├── DashboardTab.tsx             # System health metrics & category aggregation chart
-│   │   ├── FileClaimModal.tsx           # Claim submission modal with trigger validation
-│   │   ├── Header.tsx                   # Top navigation with role switcher & reset button
-│   │   ├── ItemDetailModal.tsx          # Item deep inspector with candidate matches
-│   │   ├── ItemsTab.tsx                 # Full catalog with multi-column filtering
-│   │   ├── Navigation.tsx               # Tab switcher with badge indicators
-│   │   ├── ReportItemModal.tsx          # Item reporting modal with FastEmbed vectorization
-│   │   ├── SchemaTab.tsx                # Visual ER and 3NF schema inspector + dictionary
-│   │   ├── SemanticSearchTab.tsx        # Vector cosine search vs ILIKE side-by-side
-│   │   └── SqlConsoleTab.tsx            # Interactive query runner with execution timing
+│   │   ├── BrowseView.tsx               # Central catalog with multi-column filters & search
+│   │   ├── MyActivityView.tsx           # Student/Staff view of their reported items & claims
+│   │   ├── ClaimsReviewView.tsx         # Staff/Admin claim review queue with proof inspection
+│   │   ├── Header.tsx                   # Top navigation with profile switcher & action button
+│   │   ├── ItemDetailModal.tsx          # Item deep inspector with unconfirmed potential matches
+│   │   ├── ReportItemModal.tsx          # Item submission modal with FastEmbed vectorization
+│   │   ├── FileClaimModal.tsx           # Claim filing modal with trigger validation
+│   │   ├── SignInModal.tsx              # Campus authentication and account switcher
+│   │   └── SystemToolsModal.tsx         # Evaluation console with SQL runner, schema, and reset
 │   ├── lib/
 │   │   ├── db.ts                        # Connection pool singleton (`pg`) with transaction helper
 │   │   └── embed.ts                     # FastEmbed generation wrapper and match refresher

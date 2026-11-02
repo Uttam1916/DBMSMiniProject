@@ -57,10 +57,15 @@ export async function GET(
           f.title AS matched_title,
           f.description AS matched_description,
           f.status AS matched_status,
+          f.item_date::text AS matched_date,
+          fl.name AS matched_location,
+          fc.name AS matched_category,
           ROUND(m.similarity_score::numeric, 4) AS similarity_score,
           m.match_status
         FROM item_match m
         JOIN item f ON f.item_id = m.found_item_id
+        JOIN location fl ON fl.location_id = f.location_id
+        JOIN category fc ON fc.category_id = f.category_id
         WHERE m.lost_item_id = $1
         ORDER BY m.similarity_score DESC;
         `,
@@ -75,10 +80,15 @@ export async function GET(
           l.title AS matched_title,
           l.description AS matched_description,
           l.status AS matched_status,
+          l.item_date::text AS matched_date,
+          ll.name AS matched_location,
+          lc.name AS matched_category,
           ROUND(m.similarity_score::numeric, 4) AS similarity_score,
           m.match_status
         FROM item_match m
         JOIN item l ON l.item_id = m.lost_item_id
+        JOIN location ll ON ll.location_id = l.location_id
+        JOIN category lc ON lc.category_id = l.category_id
         WHERE m.found_item_id = $1
         ORDER BY m.similarity_score DESC;
         `,

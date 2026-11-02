@@ -12,6 +12,8 @@ export async function GET(request: NextRequest) {
     const categoryId = searchParams.get('category_id');
     const locationId = searchParams.get('location_id');
     const search = searchParams.get('search');
+    const reportedBy = searchParams.get('reported_by');
+    const dateFilter = searchParams.get('date_filter');
 
     let sql = `
       SELECT
@@ -31,7 +33,8 @@ export async function GET(request: NextRequest) {
         u.name AS reporter_name,
         u.email AS reporter_email,
         u.role AS reporter_role,
-        (SELECT COUNT(*) FROM claim cl WHERE cl.item_id = i.item_id)::int AS claims_count
+        (SELECT COUNT(*) FROM claim cl WHERE cl.item_id = i.item_id)::int AS claims_count,
+        (SELECT COUNT(*) FROM item_match m WHERE m.lost_item_id = i.item_id OR m.found_item_id = i.item_id)::int AS matches_count
       FROM item i
       JOIN category c ON c.category_id = i.category_id
       JOIN location l ON l.location_id = i.location_id
@@ -61,6 +64,19 @@ export async function GET(request: NextRequest) {
       sql += ` AND i.location_id = $${params.length}`;
     }
 
+    if (reportedBy) {
+      params.push(Number(reportedBy));
+      sql += ` AND i.reported_by = $${params.length}`;
+    }
+
+    if (dateFilter === 'today') {
+      sql += ` AND i.item_date = CURRENT_DATE`;
+    } else if (dateFilter === 'week') {
+      sql += ` AND i.item_date >= CURRENT_DATE - INTERVAL '7 days'`;
+    } else if (dateFilter === 'month') {
+      sql += ` AND i.item_date >= CURRENT_DATE - INTERVAL '30 days'`;
+    }
+
     if (search) {
       params.push(`%${search}%`);
       sql += ` AND (i.title ILIKE $${params.length} OR i.description ILIKE $${params.length})`;
@@ -82,7 +98,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { title, description, item_type, category_id, location_id, reported_by } = body;
+    const { title, description, item_type, category_id, location_id, reported_by, item_date } = body;
 
     // Database / Application Level Validation
     if (!title || !description || !item_type || !category_id || !location_id || !reported_by) {
@@ -107,7 +123,6 @@ export async function POST(request: NextRequest) {
       vectorString = `[${vector.map((v) => v.toFixed(6)).join(',')}]`;
     } catch (embErr) {
       console.warn('Embedding generation warning:', embErr);
-      // We will allow item insert even if embedding generation has a temporary delay
     }
 
     // Safe SQL Parameterized Insert
@@ -123,7 +138,7 @@ export async function POST(request: NextRequest) {
         location_id,
         embedding
       )
-      VALUES ($1, $2, $3, CURRENT_DATE, 'OPEN', $4, $5, $6, $7::vector)
+      VALUES ($1, $2, $3, COALESCE($4::date, CURRENT_DATE), 'OPEN', $5, $6, $7, $8::vector)
       RETURNING
         item_id,
         title,
@@ -138,6 +153,7 @@ export async function POST(request: NextRequest) {
       title.trim(),
       description.trim(),
       item_type,
+      item_date || null,
       Number(reported_by),
       Number(category_id),
       Number(location_id),
