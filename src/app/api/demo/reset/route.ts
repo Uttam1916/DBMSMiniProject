@@ -8,8 +8,9 @@ export async function POST() {
   try {
     await client.query('BEGIN;');
 
-    // 1. Delete test-inserted items (e.g. Red umbrella)
-    await client.query("DELETE FROM item WHERE title = 'Red umbrella';");
+    // 1. Delete user-reported test items (keeping baseline 10 items)
+    await client.query("DELETE FROM item WHERE item_id > 10 OR title = 'Red umbrella';");
+    await client.query("SELECT setval('item_item_id_seq', (SELECT COALESCE(MAX(item_id), 10) FROM item));");
 
     // 2. Clear all claims
     await client.query('DELETE FROM claim;');

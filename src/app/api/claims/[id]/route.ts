@@ -13,7 +13,15 @@ export async function PATCH(
   }
 
   const body = await request.json();
-  const { claim_status } = body;
+  const { claim_status, user_role } = body;
+
+  // Enforce role-based access control (RBAC): Only STAFF or ADMIN may approve or reject claims
+  if (user_role && user_role === 'STUDENT') {
+    return NextResponse.json(
+      { error: 'Forbidden: Students are not authorized to review claims. Required role: STAFF or ADMIN.' },
+      { status: 403 }
+    );
+  }
 
   if (!['PENDING', 'APPROVED', 'REJECTED'].includes(claim_status)) {
     return NextResponse.json(

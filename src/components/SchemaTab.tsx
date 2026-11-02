@@ -24,9 +24,9 @@ export default function SchemaTab() {
     {
       name: 'location',
       pk: 'location_id (INTEGER)',
-      description: 'Campus physical zones (Library, Cafeteria, Block A).',
-      constraints: 'name UNIQUE, NOT NULL',
-      relationships: 'Referenced by item(location_id)',
+      description: 'Campus physical zones with recursive parent-child hierarchy (Library, Cafeteria, Block A, sub-zones).',
+      constraints: 'name UNIQUE, NOT NULL, parent_location_id FK to location(location_id) ON DELETE SET NULL',
+      relationships: 'Referenced by item(location_id); self-referencing hierarchy for recursive CTE',
     },
     {
       name: 'item',

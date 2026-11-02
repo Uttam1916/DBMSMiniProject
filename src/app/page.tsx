@@ -76,7 +76,7 @@ export default function Home() {
     await refreshAll();
   };
 
-  // Handler for claim status update (Trigger & Transaction demonstration)
+  // Handler for claim status update (Trigger & Transaction demonstration with RBAC)
   const handleUpdateClaimStatus = async (
     claimId: number,
     status: 'APPROVED' | 'REJECTED'
@@ -84,7 +84,11 @@ export default function Home() {
     const res = await fetch(`/api/claims/${claimId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ claim_status: status }),
+      body: JSON.stringify({
+        claim_status: status,
+        user_role: currentUser?.role,
+        user_id: currentUser?.user_id,
+      }),
     });
 
     const data = await res.json();
