@@ -19,7 +19,7 @@ async function buildPdf() {
       <style>
         @page {
           size: A4;
-          margin: 0;
+          margin: 16mm 16mm 16mm 16mm;
         }
         * {
           box-sizing: border-box;
@@ -30,7 +30,6 @@ async function buildPdf() {
           font-size: 9.5pt;
           line-height: 1.5;
           background: #ffffff;
-          padding: 0 4mm;
         }
         h1 {
           font-size: 16pt;
@@ -156,7 +155,7 @@ async function buildPdf() {
   const reportHtmlPath = path.join(projectRoot, 'report_preview.html');
   fs.writeFileSync(reportHtmlPath, htmlContent, 'utf-8');
 
-  console.log('Generating PDF via Chromium with university header/footer...');
+  console.log('Generating clean PDF without top/bottom headers or footers...');
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
   await page.goto(`file://${reportHtmlPath}`, { waitUntil: 'load' });
@@ -165,26 +164,14 @@ async function buildPdf() {
   await page.pdf({
     path: path.join(projectRoot, 'PROJECT_REPORT.pdf'),
     format: 'A4',
-    margin: { top: '18mm', bottom: '18mm', left: '16mm', right: '16mm' },
+    margin: { top: '16mm', bottom: '16mm', left: '16mm', right: '16mm' },
     printBackground: true,
-    displayHeaderFooter: true,
-    headerTemplate: `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 7pt; color: #64748b; width: 100%; display: flex; justify-content: space-between; padding: 0 16mm;">
-        <span>PES University • Department of CSE</span>
-        <span>UE22CS251A DBMS Experiential Learning – Level 3 Project Report</span>
-      </div>
-    `,
-    footerTemplate: `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 7pt; color: #64748b; width: 100%; display: flex; justify-content: space-between; padding: 0 16mm;">
-        <span>Uttam K R (PES1UG24CS697) • Campus Lost-and-Found System (pgvector)</span>
-        <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
-      </div>
-    `
+    displayHeaderFooter: false,
   });
 
   await browser.close();
   fs.unlinkSync(reportHtmlPath);
-  console.log('SUCCESS: PROJECT_REPORT.pdf compiled!');
+  console.log('SUCCESS: Clean PROJECT_REPORT.pdf compiled without headers or footers!');
 }
 
 buildPdf().catch(err => {
