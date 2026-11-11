@@ -18,8 +18,7 @@
 
 | Student Name | SRN | Role & Individual Contribution |
 | :--- | :--- | :--- |
-| **Uttam K R** | *PES1UG22CS681* | **Full-Stack Application Architect**: Built Next.js web application (App Router, TypeScript, Tailwind CSS), API Route Handlers, PostgreSQL connection pooling (`pg`), FastEmbed ONNX embedding pipeline (`scripts/embed_query.py`), Role-Based Access Control (RBAC) UI and middleware, interactive SQL Console. |
-| **Team Partner** | *PES1UG22CS682* | **Database Modeling & Integrity Engineer**: Designed Entity-Relationship (ER) model and 3NF Relational Schema, implemented DDL constraints, foreign key cascades/restrictions, PL/pgSQL database triggers (`sync_item_status_after_claim`, `validate_claim_item`, `validate_item_match_types`), database views, recursive queries, and test case verification. |
+| **Uttam K R** | *PES1UG24CS697* | **Lead Developer & Database Architect (Sole Contributor)**: End-to-end design and implementation of both database and application layers. Conceptualized ER model, converted to 3NF relational schema, implemented PostgreSQL DDL/DML, PL/pgSQL triggers (`sync_item_status_after_claim`, `validate_claim_item`, `validate_item_match_types`), database views, recursive CTEs, and pgvector HNSW indexing. Built the complete Next.js 14 web application, FastEmbed ONNX 384-d vector embedding pipeline, ACID transaction handlers with row-level locking (`FOR UPDATE`), role-based access control (RBAC), and interactive evaluation tools. |
 
 ---
 
@@ -600,14 +599,22 @@ DBMSmini/
 **Figure 7.1**: Core PostgreSQL DDL with `VECTOR(384)` dense embedding attribute, partial unique index `idx_one_approved_claim_per_item`, HNSW cosine index, and PL/pgSQL trigger `sync_item_status_after_claim`.
 ![PostgreSQL DDL, Constraints, and Trigger Implementation](screenshots/code_ddl_and_triggers.png)
 
+*Code Explanation*: The table definition establishes strong domain integrity using `CHECK` constraints on `item_type` and `status`, foreign keys with `ON DELETE RESTRICT` to prevent orphan cascades, and a native `VECTOR(384)` column for dense semantic embeddings. A partial unique index (`idx_one_approved_claim_per_item`) guarantees at the database engine level that at most one claim per item can reach `APPROVED` status. An HNSW cosine index (`m=16, ef_construction=64`) accelerates high-dimensional nearest-neighbor retrieval, while trigger function `sync_item_status_after_claim` automatically transitions item state between `OPEN` and `CLAIMED` when claims are adjudicated.
+
 **Figure 7.2**: Vector embedding generation pipeline using FastEmbed ONNX runtime (`sentence-transformers/all-MiniLM-L6-v2`) and automated lateral match refresh (`refreshItemMatches`).
 ![FastEmbed Vector Generation and Lateral Refresh](screenshots/code_vector_generation.png)
+
+*Code Explanation*: The `generateTextEmbedding` function interfaces with a local FastEmbed ONNX runtime executing `sentence-transformers/all-MiniLM-L6-v2` on CPU, converting unstructured lost-and-found text descriptions into normalized 384-dimensional dense vectors without external cloud API latency. Upon item insertion, `refreshItemMatches` executes a `CROSS JOIN LATERAL` query against stored PL/pgSQL function `find_matching_items(itemId, 5)`, computing cosine distances and populating candidate pairings in `item_match` with `ON CONFLICT DO UPDATE` idempotency.
 
 **Figure 7.3**: ACID claim adjudication route (`/api/claims/[id]`) showing row-level locking (`FOR UPDATE`), role-based access control (RBAC), and trigger execution verification.
 ![ACID Claim Approval with RBAC and Trigger Verification](screenshots/code_acid_claim_approval.png)
 
+*Code Explanation*: This endpoint enforces role-based access control at the server boundary, returning `403 Forbidden` if a student attempts claim adjudication. A dedicated database client executes within an explicit `BEGIN ... COMMIT` transaction, acquiring an exclusive row-level lock (`FOR UPDATE`) on the claim and parent item to prevent concurrent approval race conditions. When the claim update executes, trigger `sync_item_status_after_claim` fires atomically, mutating the item's status to `CLAIMED` before committing.
+
 **Figure 7.4**: Semantic vector retrieval API handler comparing pgvector cosine distance (`1 - (i.embedding <=> $1::vector)`) against traditional relational `ILIKE` pattern matching.
 ![Semantic Vector Search vs Keyword ILIKE API](screenshots/code_semantic_search_api.png)
+
+*Code Explanation*: The route accepts a natural language search query, generates its 384-dimensional dense vector representation, and executes a pgvector cosine similarity query (`1 - (embedding <=> $1::vector)`) against open items. Concurrently, it runs a relational `ILIKE` pattern match across `title` and `description`. Returning both result sets side-by-side demonstrates how semantic vector retrieval overcomes vocabulary mismatch where traditional keyword matching returns zero hits.
 
 ---
 
@@ -642,8 +649,8 @@ DBMSmini/
 
 | # | Evaluation Rubric | Marks | Completion Status | Detailed Implementation Evidence in Project |
 | :---: | :--- | :---: | :---: | :--- |
-| **1** | **ER Diagram** | **2** | **100% Completed** | Complete Entity-Relationship model (`lost_found_ER.png` and `public/lost_found_ER.png`) modeling entities (`users`, `category`, `location`, `item`, `item_match`, `claim`), primary keys, and cardinalities. Embedded directly in the web app under the "Database Tools" modal. |
-| **2** | **Relational schema with keys, relationships, and constraints** | **3** | **100% Completed** | Fully normalized 3NF relational schema (`lost_found_relational_schema.png`). Primary keys, composite primary keys (`item_match`), foreign keys with `ON DELETE RESTRICT` and `ON DELETE CASCADE`, domain `CHECK` constraints (`role`, `status`, `item_type`, `similarity_score`), and `UNIQUE` constraints (`email`, `category.name`, `location.name`). |
+| **1** | **ER Diagram** | **2** | **100% Completed** | Complete Entity-Relationship model (`public/lost_found_ER.png`) modeling entities (`users`, `category`, `location`, `item`, `item_match`, `claim`), primary keys, and cardinalities. Embedded directly in the web app under the "Database Tools" modal. |
+| **2** | **Relational schema with keys, relationships, and constraints** | **3** | **100% Completed** | Fully normalized 3NF relational schema (`public/lost_found_relational_schema.png`). Primary keys, composite primary keys (`item_match`), foreign keys with `ON DELETE RESTRICT` and `ON DELETE CASCADE`, domain `CHECK` constraints (`role`, `status`, `item_type`, `similarity_score`), and `UNIQUE` constraints (`email`, `category.name`, `location.name`). |
 | **3** | **SQL database implementation - DDL with constraints** | **4** | **100% Completed** | Implemented in `campus_lost_found_setup.sql`. Features `CREATE TABLE`, `ALTER TABLE item ALTER COLUMN title TYPE VARCHAR(200);`, `DROP TABLE ... CASCADE;`, composite primary keys, check constraints, default values, HNSW vector index, and partial unique index (`idx_one_approved_claim_per_item`). |
 | **4** | **NoSQL / Vector database creation** | **4** | **100% Completed** | PostgreSQL 16 extended with native `pgvector` (`CREATE EXTENSION IF NOT EXISTS vector;`). High-dimensional dense vector attribute `embedding VECTOR(384)` indexed with an HNSW cosine index (`USING hnsw (embedding vector_cosine_ops)`). |
 | **5** | **Technology justification** | **1** | **100% Completed** | Exhaustive justification matrix contrasting PostgreSQL + pgvector against relational MySQL, document NoSQL (MongoDB), and dedicated vector databases. Justifies eliminating synchronization drift and combining ACID claim concurrency with zero-latency vector math. |
@@ -655,7 +662,7 @@ DBMSmini/
 | **11** | **Backend / API and database integration** | **2** | **100% Completed** | Next.js API Route Handlers (`/api/items`, `/api/claims`, `/api/matches`, `/api/queries/run`, `/api/search/semantic`, `/api/meta`, `/api/demo/reset`) integrated via connection pooling (`node-postgres`). Parameterized queries protect against SQL injection. Environment variables managed in `.env.local`. |
 | **12** | **Authentication implementation & RBAC (Minimum two roles)** | **4** | **100% Completed** | 3 institutional roles (`STUDENT`, `STAFF`, `ADMIN`) validated by database `CHECK (role IN ('STUDENT','STAFF','ADMIN'))` and pgcrypto bcrypt hashes. Frontend session switcher modifies capabilities; backend API enforces RBAC by blocking students with `403 Forbidden` from claim adjudication. |
 | **13** | **Documentation, Git / GitHub** | **2** | **100% Completed** | Clean Git repository structure, meaningful commit history, complete `README.md` with setup and live demonstration steps, and formal `PROJECT_REPORT.md` covering all 8 specified sections. |
-| **14** | **Originality, individual contribution, Modification / Viva** | **4** | **100% Completed** | Solves authentic university lost-and-found vocabulary mismatch problem. Clearly delineated student contributions (Uttam K R: Full-Stack & Vectors; Team Partner: Relational Modeling & Triggers). Includes interactive SQL console ready for ad-hoc examiner queries and live viva modifications. |
+| **14** | **Originality, individual contribution, Modification / Viva** | **4** | **100% Completed** | Solves authentic university lost-and-found vocabulary mismatch problem. Complete individual contribution by Uttam K R (PES1UG24CS697) covering both relational database engineering (schema, triggers, views, recursive CTE) and full-stack vector application architecture. Includes interactive SQL console ready for ad-hoc examiner queries and live viva modifications. |
 
 ---
 

@@ -3,7 +3,7 @@
 **Course:** Database Management Systems (DBMS Experiential Learning – Level 3)  
 **Course Code:** UE22CS251A / CS251  
 **Faculty Evaluators:** Prof. Vinay Joshi, Dr. Nagasundari S  
-**Student Team:** Uttam K R (*PES1UG22CS681*) & Team Partner (*PES1UG22CS682*)  
+**Student:** Uttam K R (*PES1UG24CS697*) (Sole Contributor)  
 **Database Paradigms:** Relational (PostgreSQL 16) + Vector Database (pgvector HNSW)  
 **Total Marks:** 50 Marks (14 Rubrics)
 
@@ -550,7 +550,7 @@ Maintain a clean Git repository with meaningful commit history, structured READM
 
 ### Repository Artifacts
 - **`README.md`**: Complete quick-start guide, step-by-step evaluation walkthrough, and data dictionary.
-- **`PROJECT_REPORT.md`**: Formal academic report covering all 8 required sections with screenshot placeholders.
+- **`PROJECT_REPORT.md`**: Formal academic report covering all 8 required sections with embedded figures and code explanations.
 - **`EVALUATION_RUBRICS_GUIDE.md`**: This comprehensive 14-rubric viva defense manual.
 - **Git Commit Log**: Commit messages following conventional commits (`feat(ui)`, `feat(db)`, `docs(report)`).
 
@@ -561,9 +561,8 @@ Maintain a clean Git repository with meaningful commit history, structured READM
 ### Objective
 Demonstrate authentic problem solving, clearly defined team responsibilities, and the ability to answer questions and make live schema/query modifications during viva.
 
-### Team Responsibilities
-- **Uttam K R (PES1UG22CS681)**: Application Architect & Full-Stack Engineer. Next.js 14 web client, API route handlers, FastEmbed ONNX embedding pipeline, PostgreSQL connection pooling (`pg`), RBAC middleware, and interactive SQL console.
-- **Team Partner (PES1UG22CS682)**: Database Modeler & Integrity Engineer. Conceptual ER modeling, 3NF relational schema, DDL/DML scripts with integrity constraints, PL/pgSQL triggers (`sync_item_status_after_claim`, `validate_claim_item`, `validate_item_match_types`), database views, and recursive hierarchy traversal.
+### Individual Responsibilities & Contributions
+- **Uttam K R (PES1UG24CS697)**: Sole Contributor & Lead Developer. Designed and implemented the complete project end-to-end: conceptual ER modeling, 3NF relational schema, DDL/DML scripts with integrity constraints, PL/pgSQL triggers (`sync_item_status_after_claim`, `validate_claim_item`, `validate_item_match_types`), database views, recursive hierarchy traversal, Next.js 14 web client, API route handlers, FastEmbed ONNX vector pipeline, PostgreSQL connection pooling (`pg`), RBAC middleware, and interactive SQL console.
 
 ---
 

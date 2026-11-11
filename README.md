@@ -9,7 +9,11 @@
 
 ---
 
- **Uttam K R**  *PES1UG22CS681* 
+## Student Information & Responsibilities
+
+| Student Name | SRN | Primary Role | Core Contributions |
+| :--- | :--- | :--- | :--- |
+| **Uttam K R** | *PES1UG24CS697* | Lead Developer & Database Architect (Sole Contributor) | Complete full-stack and database implementation: ER modeling, 3NF schema, DDL/DML, PL/pgSQL triggers (`sync_item_status_after_claim`, `validate_claim_item`, `validate_item_match_types`), database views, recursive CTEs, pgvector HNSW indexing, Next.js 14 web application, FastEmbed ONNX vector pipeline, ACID transaction handlers, and interactive evaluation tools. |
 ---
 
 ## System Architecture

@@ -176,7 +176,7 @@ async function buildPdf() {
     `,
     footerTemplate: `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 7pt; color: #64748b; width: 100%; display: flex; justify-content: space-between; padding: 0 16mm;">
-        <span>Smart Campus Lost-and-Found System with Semantic Vector Retrieval</span>
+        <span>Uttam K R (PES1UG24CS697) • Campus Lost-and-Found System (pgvector)</span>
         <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
       </div>
     `
