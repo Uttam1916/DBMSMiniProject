@@ -1,7 +1,6 @@
 # Smart Campus Lost-and-Found Item Matching System
 ### DBMS Experiential Learning – Level 3 Final Project
 
-**Course Instructor:** Dr. Nagasundari S  
 **Course:** Database Management Systems (Experiential Learning Level 3)  
 **Repository:** [https://github.com/Uttam1916/DBMSMiniProject](https://github.com/Uttam1916/DBMSMiniProject)  
 **Database Paradigms:** Relational (PostgreSQL 16) + Vector Database (pgvector HNSW)  
@@ -10,13 +9,7 @@
 
 ---
 
-## Team Formation & Responsibilities
-
-| Member | SRN | Primary Role | Core Contributions |
-| :--- | :--- | :--- | :--- |
-| **Uttam K R** | *PES1UG22CS681* | Application Architect & Full-Stack Engineer | Next.js 14 web application, PostgreSQL connection pool (`node-postgres`), FastEmbed ONNX vector pipeline, API Route Handlers, Role-Based Access Control UI & middleware, interactive SQL Console. |
-| **Team Partner** | *PES1UG22CS682* | Database Modeler & Integrity Engineer | Relational Schema Design (3NF), ER Modeling, DDL/DML scripts with integrity constraints, PL/pgSQL Triggers (`sync_item_status_after_claim`, `validate_claim_item`, `validate_item_match_types`), Database Views, Recursive Queries, and Test Case verification. |
-
+ **Uttam K R**  *PES1UG22CS681* 
 ---
 
 ## System Architecture
