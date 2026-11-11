@@ -226,8 +226,6 @@ DBMSmini/
 ├── .gitignore                           # Git ignore rules
 ├── campus_lost_found_setup.sql          # Master SQL setup (DDL, triggers, views, functions, data)
 ├── demo_queries.sql                     # All 15 demonstration & evaluation queries
-├── lost_found_ER.png                    # Entity-Relationship diagram
-├── lost_found_relational_schema.png     # 3NF Relational Schema diagram
 ├── next.config.mjs                      # Next.js configuration
 ├── package.json                         # Node dependencies & execution scripts
 ├── package-lock.json                    # Dependency lockfile
@@ -282,8 +280,8 @@ DBMSmini/
 
 | Evaluation Rubric | Marks | Status | Implementation Evidence |
 | :--- | :---: | :---: | :--- |
-| **ER diagram** | 2 | 100% | `lost_found_ER.png`, displayed in Schema tab. |
-| **Relational schema with keys & constraints** | 3 | 100% | `lost_found_relational_schema.png`, 3NF normalized, PKs, FKs, CHECK. |
+| **ER diagram** | 2 | 100% | `public/lost_found_ER.png`, displayed in Schema tab. |
+| **Relational schema with keys & constraints** | 3 | 100% | `public/lost_found_relational_schema.png`, 3NF normalized, PKs, FKs, CHECK. |
 | **SQL database implementation - DDL** | 4 | 100% | `campus_lost_found_setup.sql`, `ALTER TABLE`, check constraints, HNSW index. |
 | **NoSQL / Vector database creation** | 4 | 100% | `VECTOR(384)`, HNSW cosine index, pgvector extension. |
 | **Technology justification** | 1 | 100% | Detailed in Section 3 of `PROJECT_REPORT.md` and README. |

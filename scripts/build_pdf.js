@@ -19,48 +19,49 @@ async function buildPdf() {
       <style>
         @page {
           size: A4;
-          margin: 18mm 16mm 18mm 16mm;
-          @bottom-right {
-            content: counter(page);
-          }
+          margin: 0;
+        }
+        * {
+          box-sizing: border-box;
         }
         body {
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
           color: #1e293b;
-          font-size: 10pt;
+          font-size: 9.5pt;
           line-height: 1.5;
           background: #ffffff;
+          padding: 0 4mm;
         }
         h1 {
-          font-size: 18pt;
+          font-size: 16pt;
           font-weight: 700;
           color: #0f172a;
-          border-bottom: 2px solid #0f172a;
-          padding-bottom: 4px;
-          margin-top: 20pt;
+          border-bottom: 1.5px solid #0f172a;
+          padding-bottom: 3px;
+          margin-top: 18pt;
           margin-bottom: 8pt;
           page-break-after: avoid;
         }
         h2 {
-          font-size: 13.5pt;
+          font-size: 13pt;
           font-weight: 700;
           color: #1e293b;
           border-bottom: 1px solid #cbd5e1;
-          padding-bottom: 3px;
-          margin-top: 16pt;
+          padding-bottom: 2px;
+          margin-top: 14pt;
           margin-bottom: 6pt;
           page-break-after: avoid;
         }
         h3 {
-          font-size: 11pt;
+          font-size: 10.5pt;
           font-weight: 600;
           color: #334155;
-          margin-top: 12pt;
+          margin-top: 10pt;
           margin-bottom: 4pt;
           page-break-after: avoid;
         }
         h4 {
-          font-size: 10pt;
+          font-size: 9.5pt;
           font-weight: 600;
           color: #475569;
           margin-top: 8pt;
@@ -69,14 +70,15 @@ async function buildPdf() {
         }
         p {
           margin-top: 0;
-          margin-bottom: 6pt;
+          margin-bottom: 5pt;
+          text-align: justify;
         }
         table {
           width: 100%;
           border-collapse: collapse;
-          margin-top: 6pt;
-          margin-bottom: 10pt;
-          font-size: 8.5pt;
+          margin-top: 5pt;
+          margin-bottom: 8pt;
+          font-size: 8pt;
           page-break-inside: avoid;
         }
         th, td {
@@ -95,23 +97,23 @@ async function buildPdf() {
         }
         code {
           font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
-          font-size: 7.8pt;
+          font-size: 7.6pt;
           background: #f1f5f9;
           border: 1px solid #e2e8f0;
-          border-radius: 3px;
-          padding: 1px 3px;
+          border-radius: 2px;
+          padding: 0.5px 3px;
           color: #0f172a;
         }
         pre {
           background: #0f172a;
           color: #f8fafc;
-          padding: 8pt 10pt;
-          border-radius: 6px;
+          padding: 7pt 9pt;
+          border-radius: 4px;
           overflow-x: auto;
-          font-size: 7.5pt;
-          line-height: 1.4;
+          font-size: 7.2pt;
+          line-height: 1.35;
           margin-top: 4pt;
-          margin-bottom: 8pt;
+          margin-bottom: 7pt;
           page-break-inside: avoid;
         }
         pre code {
@@ -122,28 +124,26 @@ async function buildPdf() {
           font-size: inherit;
         }
         img {
-          max-width: 95%;
+          max-width: 92%;
           height: auto;
           display: block;
-          margin: 8pt auto;
-          border-radius: 6px;
-          border: 1px solid #e2e8f0;
-          box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+          margin: 6pt auto 8pt auto;
+          border-radius: 4px;
+          border: 1px solid #cbd5e1;
           page-break-inside: avoid;
         }
         blockquote {
-          margin: 6pt 0;
-          padding: 5pt 8pt;
-          border-left: 3px solid #3b82f6;
-          background: #eff6ff;
-          color: #1e40af;
+          margin: 5pt 0;
+          padding: 4pt 8pt;
+          border-left: 3px solid #64748b;
+          background: #f8fafc;
+          color: #334155;
           font-size: 8.5pt;
-          border-radius: 0 4px 4px 0;
         }
         hr {
           border: none;
           border-top: 1px solid #e2e8f0;
-          margin: 14pt 0;
+          margin: 12pt 0;
         }
       </style>
     </head>
@@ -156,23 +156,35 @@ async function buildPdf() {
   const reportHtmlPath = path.join(projectRoot, 'report_preview.html');
   fs.writeFileSync(reportHtmlPath, htmlContent, 'utf-8');
 
-  console.log('Generating PDF via Chromium...');
+  console.log('Generating PDF via Chromium with university header/footer...');
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
   await page.goto(`file://${reportHtmlPath}`, { waitUntil: 'load' });
-  await page.waitForTimeout(1000); // Wait for local images to decode
+  await page.waitForTimeout(1000); // Allow images to decode
 
   await page.pdf({
     path: path.join(projectRoot, 'PROJECT_REPORT.pdf'),
     format: 'A4',
     margin: { top: '18mm', bottom: '18mm', left: '16mm', right: '16mm' },
     printBackground: true,
+    displayHeaderFooter: true,
+    headerTemplate: `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 7pt; color: #64748b; width: 100%; display: flex; justify-content: space-between; padding: 0 16mm;">
+        <span>PES University • Department of CSE</span>
+        <span>UE22CS251A DBMS Experiential Learning – Level 3 Project Report</span>
+      </div>
+    `,
+    footerTemplate: `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 7pt; color: #64748b; width: 100%; display: flex; justify-content: space-between; padding: 0 16mm;">
+        <span>Smart Campus Lost-and-Found System with Semantic Vector Retrieval</span>
+        <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
+      </div>
+    `
   });
 
   await browser.close();
-  // Remove temporary HTML preview
   fs.unlinkSync(reportHtmlPath);
-  console.log('SUCCESS: PROJECT_REPORT.pdf created!');
+  console.log('SUCCESS: PROJECT_REPORT.pdf compiled!');
 }
 
 buildPdf().catch(err => {
