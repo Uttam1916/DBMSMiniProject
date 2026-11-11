@@ -172,6 +172,11 @@ CREATE UNIQUE INDEX idx_one_approved_claim_per_item
     ON claim(item_id) WHERE claim_status = 'APPROVED';
 ```
 
+*DDL & Constraints Explanation*:
+1. **Schema Evolution (`ALTER TABLE`)**: Demonstrates schema maintenance without data loss by modifying the `title` attribute's column width to accommodate longer campus inventory descriptions.
+2. **Join & Filter Acceleration**: B-tree indexes are placed on all foreign key columns (`reported_by`, `category_id`, `location_id`, `item_id`, `claimed_by`) to transform relational joins from full table scans into index lookups, achieving $O(\log n)$ retrieval.
+3. **Partial Unique Index (`idx_one_approved_claim_per_item`)**: Unlike a standard unique constraint that enforces uniqueness across all rows, this partial index enforces uniqueness **only** on rows where `claim_status = 'APPROVED'`. Multiple claimants may file competing `PENDING` claims for the same item, but the PostgreSQL storage engine strictly prevents more than one claim from ever reaching `APPROVED` status, eliminating concurrency race conditions at the database level.
+
 ### 4.4 Advanced SQL: PL/pgSQL Triggers
 
 #### Trigger 1: Automatic Status Synchronization on Claim Approval
@@ -199,6 +204,7 @@ CREATE TRIGGER trg_claim_update_sync_item_status
 AFTER UPDATE OF claim_status ON claim
 FOR EACH ROW EXECUTE FUNCTION sync_item_status_after_claim();
 ```
+*Trigger 1 Explanation*: This row-level `AFTER UPDATE OF claim_status` trigger guarantees atomic state transitions between claims and items. When an administrator updates a claim to `APPROVED`, the trigger automatically transitions the parent item's status from `OPEN` to `CLAIMED`. If the item is already closed or not in an `OPEN` state, the trigger raises an exception, aborting the transaction. Conversely, if an approved claim is revoked or rejected, the trigger resets the item status back to `OPEN`.
 
 #### Trigger 2: Target Item Validation for Claims
 ```sql
@@ -235,6 +241,7 @@ CREATE TRIGGER trg_validate_claim_item
 BEFORE INSERT OR UPDATE ON claim
 FOR EACH ROW EXECUTE FUNCTION validate_claim_item();
 ```
+*Trigger 2 Explanation*: A defensive `BEFORE INSERT OR UPDATE` trigger enforcing business logic prior to writing to the `claim` table. It ensures that students can only submit claims against items designated as `FOUND` (preventing nonsensical claims on another student's `LOST` report) and verifies that the target item is currently `OPEN`. Additionally, it disallows mutating `item_id` on existing claims to maintain audit trail integrity.
 
 #### Trigger 3: Match Pairing Integrity
 ```sql
@@ -261,6 +268,7 @@ CREATE TRIGGER trg_validate_item_match_types
 BEFORE INSERT OR UPDATE ON item_match
 FOR EACH ROW EXECUTE FUNCTION validate_item_match_types();
 ```
+*Trigger 3 Explanation*: Enforces bipartite graph consistency on the `item_match` pairing table. Before any candidate record is persisted, this trigger inspects both foreign key references to verify that `lost_item_id` points strictly to an item of type `LOST` and `found_item_id` points strictly to type `FOUND`. This prevents semantic matching degradation from pairing LOST-to-LOST or FOUND-to-FOUND items.
 
 ### 4.5 Advanced SQL: Database Views
 
@@ -284,6 +292,10 @@ JOIN item i ON i.item_id = cl.item_id
 JOIN users u ON u.user_id = cl.claimed_by
 WHERE cl.claim_status = 'PENDING';
 ```
+
+*Database Views Explanation*:
+1. **`item_details_view`**: Implements logical data independence by encapsulating the 4-table relational join between `item`, `users`, `category`, and `location`. Application clients can query a unified catalog projection directly (`SELECT * FROM item_details_view WHERE item_type = 'LOST'`) without having to construct repetitive multi-table join syntax.
+2. **`pending_claims_view`**: Provides an administrative abstraction tailored for staff review. It projects only claims with `claim_status = 'PENDING'` while joining claimant user identities and item metadata. This simplifies front-end review queries and prevents staff from seeing claims that have already been resolved or rejected.
 
 ### 4.6 Advanced SQL: PL/pgSQL Stored Function
 
@@ -322,6 +334,9 @@ END;
 $$;
 ```
 
+*Stored Function Explanation*:
+Encapsulates vector similarity search logic inside the database engine. It accepts a lost item ID and result limit, performs boundary validation (`p_limit BETWEEN 1 AND 50`), and returns a typed table of candidate found items ordered by pgvector cosine distance (`lost.embedding <=> f.embedding`). Declaring the function `STABLE` informs the PostgreSQL query optimizer that repeated calls within the same query return identical results for identical parameters, allowing plan optimization and query caching.
+
 ### 4.7 DML Operations: INSERT, UPDATE, DELETE, and Multi-Table SELECT
 
 ```sql
@@ -348,6 +363,12 @@ JOIN users u ON i.reported_by = u.user_id
 ORDER BY i.item_date DESC, i.item_id DESC LIMIT 10;
 ```
 
+*DML Operations Explanation*:
+1. **Dynamic INSERT**: Uses `SELECT ... FROM ... WHERE` lookups instead of hardcoded numeric IDs. This guarantees that user email, category name, and location name must exist and match referential integrity constraints at the moment of insertion.
+2. **UPDATE**: Mutates lifecycle status of an item from `OPEN` to `RESOLVED` when an item is returned to its owner.
+3. **DELETE with `RETURNING`**: Demonstrates safe row deletion returning deleted metadata for confirmation. Because `item_match` defines `ON DELETE CASCADE` on `lost_item_id` and `found_item_id`, any candidate pairings are purged automatically by PostgreSQL without leaving orphaned pairing records.
+4. **4-Way JOIN**: Combines `item`, `category`, `location`, and `users` tables, sorting by date and primary key descending for responsive catalog pagination.
+
 ### 4.8 Nested, Correlated, and Recursive Queries
 
 #### Nested Subquery with `IN` and Grouped `HAVING`
@@ -358,6 +379,7 @@ WHERE user_id IN (
     SELECT claimed_by FROM claim GROUP BY claimed_by HAVING COUNT(*) >= 1
 );
 ```
+*Nested Subquery Explanation*: Demonstrates independent subquery evaluation. The inner query executes first, grouping the `claim` table by claimant ID and applying an aggregate predicate (`HAVING COUNT(*) >= 1`) to isolate active claimants. The outer query matches `user_id` against this set using `IN`.
 
 #### Correlated Subquery with `EXISTS`
 ```sql
@@ -372,6 +394,7 @@ WHERE i.item_type = 'FOUND'
   AND EXISTS (SELECT 1 FROM claim c WHERE c.item_id = i.item_id)
 ORDER BY total_claims_filed DESC;
 ```
+*Correlated Subquery Explanation*: Demonstrates row-dependent subquery execution. For each candidate `FOUND` item evaluated by the outer query, the `EXISTS` subquery references the outer row's `i.item_id`. PostgreSQL evaluates this predicate efficiently via index lookup, short-circuiting as soon as the first matching claim is encountered. A correlated scalar subquery in the `SELECT` clause computes the exact claim count for each item.
 
 #### Common Table Expression (CTE): Match Confidence Tiering
 ```sql
@@ -381,16 +404,17 @@ WITH item_stats AS (
 ),
 match_categorized AS (
     SELECT s.lost_item_id, i.title AS lost_title, ROUND(s.best_score::numeric, 4) AS best_similarity,
-           s.candidate_count,
-           CASE
-               WHEN s.best_score >= 0.70 THEN 'HIGH_CONFIDENCE'
-               WHEN s.best_score >= 0.50 THEN 'MEDIUM_CONFIDENCE'
-               ELSE 'LOW_CONFIDENCE'
-           END AS match_tier
+            s.candidate_count,
+            CASE
+                WHEN s.best_score >= 0.70 THEN 'HIGH_CONFIDENCE'
+                WHEN s.best_score >= 0.50 THEN 'MEDIUM_CONFIDENCE'
+                ELSE 'LOW_CONFIDENCE'
+            END AS match_tier
     FROM item_stats s JOIN item i ON i.item_id = s.lost_item_id
 )
 SELECT * FROM match_categorized ORDER BY best_similarity DESC;
 ```
+*Common Table Expression Explanation*: Decomposes complex analytical logic into two readable, sequential intermediate result sets. The first CTE (`item_stats`) aggregates candidate count and maximum vector similarity for each lost item. The second CTE (`match_categorized`) joins this summary with `item` details and executes a conditional `CASE` expression categorizing match quality into confidence tiers (`HIGH_CONFIDENCE`, `MEDIUM_CONFIDENCE`, `LOW_CONFIDENCE`).
 
 #### Recursive Query (`WITH RECURSIVE`): Campus Location Hierarchy Graph Traversal
 ```sql
@@ -411,6 +435,11 @@ LEFT JOIN item i ON i.location_id = lh.location_id
 GROUP BY lh.location_id, lh.path, lh.depth
 ORDER BY lh.depth, lh.location_id;
 ```
+*Recursive Query Explanation*:
+1. **Anchor Member**: Initializes the base working table with root campus buildings (e.g., "Library", "Engineering Block") where `parent_location_id IS NULL`, setting starting `depth = 1` and root path.
+2. **Recursive Member**: Iteratively joins child zones (e.g., "Floor 2 -> Silent Reading Room") to the working set on `c.parent_location_id = lh.location_id`, incrementing depth and appending the zone name to the path string.
+3. **Termination Condition**: Terminates naturally when the recursive join yields an empty result set (all leaves of the campus location tree are reached).
+4. **Aggregate Distribution**: The final query performs a `LEFT JOIN` against `item`, aggregating the total items reported across each hierarchical campus sub-zone.
 
 ### 4.9 ACID Transaction Adjudication
 ```sql
@@ -434,6 +463,8 @@ WHERE cl.claim_id = 1;
 
 COMMIT;
 ```
+*ACID Transaction Explanation*:
+Demonstrates transaction isolation and row-level locking. The `SELECT ... FOR UPDATE` acquires an exclusive lock on both the claim and parent item rows, preventing concurrent transactions or competing staff approvals from reading inconsistent intermediate states. Inside the atomic transaction boundary (`BEGIN ... COMMIT`), the claim update fires trigger `sync_item_status_after_claim`, which mutates `item.status = 'CLAIMED'`. If any constraint or foreign key fails, the entire block rolls back cleanly.
 
 ---
 
@@ -456,6 +487,11 @@ CREATE INDEX IF NOT EXISTS idx_item_embedding_hnsw
     WHERE embedding IS NOT NULL;
 ```
 
+*Vector Setup & Indexing Explanation*:
+1. **pgvector Extension**: Integrates native vector operations directly within the PostgreSQL engine, allowing vector attributes to coexist with relational columns without requiring a separate vector database.
+2. **Dense Vector Dimension**: `VECTOR(384)` precisely matches the output embedding dimension of `sentence-transformers/all-MiniLM-L6-v2`.
+3. **HNSW Indexing**: Hierarchical Navigable Small World index constructs a multi-layer geometric graph over the dense vector space. Unlike flat sequential scans ($O(n)$) or IVFFlat (which requires pre-clustering centroids), HNSW achieves logarithmic nearest-neighbor retrieval ($O(\log n)$) with high recall even as inventory grows. `vector_cosine_ops` specifically optimizes cosine distance queries.
+
 ### 5.2 Vector CRUD Operations
 
 #### 1. Create (Insert Item with Pre-Computed Vector)
@@ -472,6 +508,7 @@ VALUES (
     '[-0.110855, 0.068705, -0.041783, 0.054057, 0.074294, ...]'::vector
 );
 ```
+*Vector Create Explanation*: Stores the 384-dimensional dense floating-point vector alongside standard relational attributes in a single atomic `INSERT` statement, eliminating dual-database synchronization lag.
 
 #### 2. Read (Cosine Distance Similarity Retrieval)
 ```sql
@@ -486,6 +523,7 @@ WHERE item_type = 'FOUND' AND status = 'OPEN' AND embedding IS NOT NULL
 ORDER BY embedding <=> '[-0.1346, 0.0534, ...]'::vector
 LIMIT 5;
 ```
+*Vector Read Explanation*: Uses the pgvector `<=>` cosine distance operator. Cosine distance ranges from 0 (identical orientation) to 2 (opposite). The query transforms this metric into a standard similarity score between 0 and 1 via $1 - (\mathbf{u} \Leftrightarrow \mathbf{v})$, retrieving the top 5 most semantically relevant open found items.
 
 #### 3. Update (Automated Pairings Refresh via Lateral Join)
 ```sql
@@ -497,12 +535,14 @@ WHERE lost.item_type = 'LOST'
 ON CONFLICT (lost_item_id, found_item_id)
 DO UPDATE SET similarity_score = EXCLUDED.similarity_score, match_status = 'SUGGESTED';
 ```
+*Vector Update Explanation*: Refreshes candidate pairings using a `CROSS JOIN LATERAL` query that invokes `find_matching_items` for the lost item. It upserts results into `item_match` with `ON CONFLICT DO UPDATE`, ensuring match scores stay current as new items are indexed without creating duplicate pairing entries.
 
 #### 4. Delete (Cascade Cleanup of Vector Pairings)
 ```sql
 -- Deleting an item automatically deletes dependent vector pairings in item_match
 DELETE FROM item WHERE item_id = 1 RETURNING item_id, title;
 ```
+*Vector Delete Explanation*: Demonstrates referential cleanup. Because `item_match` defines `ON DELETE CASCADE` foreign keys referencing `item(item_id)`, deleting an item instantly purges all of its vector similarity pairings from the database without leaving dangling references or requiring background vacuum scripts.
 
 ### 5.3 Embedding Model Architecture & Strategy
 
