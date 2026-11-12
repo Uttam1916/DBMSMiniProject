@@ -687,22 +687,120 @@ DBMSmini/
 
 ### Total Marks: 50/50
 
-| # | Evaluation Rubric | Marks | Completion Status | Detailed Implementation Evidence in Project |
+| # | Evaluation Rubric | Marks | Completion Status | Exact Codebase Location & Evidence |
 | :---: | :--- | :---: | :---: | :--- |
-| **1** | **ER Diagram** | **2** | **100% Completed** | Complete Entity-Relationship model (`public/lost_found_ER.png`) modeling entities (`users`, `category`, `location`, `item`, `item_match`, `claim`), primary keys, and cardinalities. Embedded directly in the web app under the "Database Tools" modal. |
-| **2** | **Relational schema with keys, relationships, and constraints** | **3** | **100% Completed** | Fully normalized 3NF relational schema (`public/lost_found_relational_schema.png`). Primary keys, composite primary keys (`item_match`), foreign keys with `ON DELETE RESTRICT` and `ON DELETE CASCADE`, domain `CHECK` constraints (`role`, `status`, `item_type`, `similarity_score`), and `UNIQUE` constraints (`email`, `category.name`, `location.name`). |
-| **3** | **SQL database implementation - DDL with constraints** | **4** | **100% Completed** | Implemented in `campus_lost_found_setup.sql`. Features `CREATE TABLE`, `ALTER TABLE item ALTER COLUMN title TYPE VARCHAR(200);`, `DROP TABLE ... CASCADE;`, composite primary keys, check constraints, default values, HNSW vector index, and partial unique index (`idx_one_approved_claim_per_item`). |
-| **4** | **NoSQL / Vector database creation** | **4** | **100% Completed** | PostgreSQL 16 extended with native `pgvector` (`CREATE EXTENSION IF NOT EXISTS vector;`). High-dimensional dense vector attribute `embedding VECTOR(384)` indexed with an HNSW cosine index (`USING hnsw (embedding vector_cosine_ops)`). |
-| **5** | **Technology justification** | **1** | **100% Completed** | Exhaustive justification matrix contrasting PostgreSQL + pgvector against relational MySQL, document NoSQL (MongoDB), and dedicated vector databases. Justifies eliminating synchronization drift and combining ACID claim concurrency with zero-latency vector math. |
-| **6** | **DML operations** | **4** | **100% Completed** | Full DML coverage: `INSERT` (item reporting, claim filing with proof), `UPDATE` (claim status modification, item status mutation), `DELETE ... RETURNING` (item deletion with foreign key cascade), and rich multi-predicate `SELECT` queries across normalized tables. |
-| **7** | **Nested / correlated / Recursive Queries, Join SQL queries** | **4** | **100% Completed** | 1. **Multi-Table Join**: 4-way join across `item`, `category`, `location`, `users`.<br>2. **Nested Subquery**: `WHERE user_id IN (SELECT claimed_by FROM claim GROUP BY claimed_by HAVING COUNT(*) >= 1)`.<br>3. **Correlated Subquery**: Scalar subquery referencing outer row with `EXISTS`.<br>4. **Recursive Query**: `WITH RECURSIVE location_hierarchy` computing campus zone paths, depth levels, and aggregate item distribution. |
-| **8** | **Advanced SQL concepts (Procedure/Function, trigger, CTE)** | **6** | **100% Completed** | 1. **Stored PL/pgSQL Function**: `find_matching_items(lost_id, limit)` encapsulating vector cosine math.<br>2. **Triggers (3)**: `sync_item_status_after_claim` (atomic status mutation), `validate_claim_item` (enforces claims on OPEN FOUND items only), `validate_item_match_types` (validates match pair types).<br>3. **CTE**: Multi-stage CTE categorizing match confidence tiers (`HIGH`, `MEDIUM`, `LOW`).<br>4. **Views (2)**: `item_details_view` and `pending_claims_view`.<br>5. **Transactions**: Explicit `BEGIN ... COMMIT` with `FOR UPDATE` row-level locks. |
-| **9** | **NoSQL / Vector feature, CRUD** | **7** | **100% Completed** | Full vector lifecycle: **Create** (384-d FastEmbed generation and vector storage), **Read** (pgvector cosine retrieval `<=>`), **Update** (`refreshItemMatches()` via `CROSS JOIN LATERAL find_matching_items(...)`), **Delete** (automatic cascade deletion), and sub-millisecond HNSW indexing. |
-| **10** | **Next.js interface** | **3** | **100% Completed** | Responsive institutional web application built with Next.js 14 App Router, TypeScript, and Tailwind CSS. Features clean browse catalog, personal activity tracking, staff claims adjudication, item detail drawer with potential matches, and system evaluation tools. |
-| **11** | **Backend / API and database integration** | **2** | **100% Completed** | Next.js API Route Handlers (`/api/items`, `/api/claims`, `/api/matches`, `/api/queries/run`, `/api/search/semantic`, `/api/meta`, `/api/demo/reset`) integrated via connection pooling (`node-postgres`). Parameterized queries protect against SQL injection. Environment variables managed in `.env.local`. |
-| **12** | **Authentication implementation & RBAC (Minimum two roles)** | **4** | **100% Completed** | 3 institutional roles (`STUDENT`, `STAFF`, `ADMIN`) validated by database `CHECK (role IN ('STUDENT','STAFF','ADMIN'))` and pgcrypto bcrypt hashes. Frontend session switcher modifies capabilities; backend API enforces RBAC by blocking students with `403 Forbidden` from claim adjudication. |
-| **13** | **Documentation, Git / GitHub** | **2** | **100% Completed** | Clean Git repository structure, meaningful commit history, complete `README.md` with setup and live demonstration steps, and formal `PROJECT_REPORT.md` covering all 8 specified sections. |
-| **14** | **Originality, individual contribution, Modification / Viva** | **4** | **100% Completed** | Solves authentic university lost-and-found vocabulary mismatch problem. Complete individual contribution by Uttam K R (PES1UG24CS697) covering both relational database engineering (schema, triggers, views, recursive CTE) and full-stack vector application architecture. Includes interactive SQL console ready for ad-hoc examiner queries and live viva modifications. |
+| **1** | **ER Diagram** | **2** | **100% Completed** | `public/lost_found_ER.png`<br>`src/components/SystemToolsModal.tsx` (Lines 314-325)<br>Section 4.1 (Lines 91-96) |
+| **2** | **Relational schema with keys, relationships, and constraints** | **3** | **100% Completed** | `public/lost_found_relational_schema.png`<br>`campus_lost_found_setup.sql` (Lines 21-75)<br>Section 4.2 (Lines 97-156) |
+| **3** | **SQL database implementation - DDL with constraints** | **4** | **100% Completed** | `campus_lost_found_setup.sql` (Lines 7-97)<br>`src/components/SystemToolsModal.tsx` (Schema Explorer) |
+| **4** | **NoSQL / Vector database creation** | **4** | **100% Completed** | `campus_lost_found_setup.sql` (Lines 8, 51, 90-92)<br>`src/app/api/items/route.ts` (Line 27: `vector_dims`)<br>`src/lib/embed.ts` (Lines 11-40) |
+| **5** | **Technology justification** | **1** | **100% Completed** | `PROJECT_REPORT.md` Section 3.2 (Lines 73-86)<br>`EVALUATION_RUBRICS_GUIDE.md` (Lines 207-234) |
+| **6** | **DML operations** | **4** | **100% Completed** | `src/app/api/items/route.ts` (Lines 94-161: INSERT)<br>`src/app/api/items/[id]/route.ts` (Lines 178-212: UPDATE & DELETE RETURNING)<br>`src/app/api/claims/route.ts` (Lines 70-76: INSERT)<br>`src/app/api/claims/[id]/route.ts` (Lines 60-68: UPDATE) |
+| **7** | **Nested / correlated / Recursive Queries, Join SQL queries** | **4** | **100% Completed** | `src/app/api/items/route.ts` (Lines 18-43: 4-Way Join & Lines 36-37: Correlated Subqueries)<br>`src/app/api/matches/route.ts` (Lines 9-37: 8-Way Join)<br>`src/app/api/queries/run/route.ts` (Lines 29-75: WITH RECURSIVE & Nested Subquery with IN/HAVING) |
+| **8** | **Advanced SQL concepts (Procedure/Function, trigger, CTE)** | **6** | **100% Completed** | `campus_lost_found_setup.sql` (Lines 99-240: 3 Triggers, 2 Views, Stored Function)<br>`src/lib/embed.ts` (Lines 45-70: Stored Function with Lateral Join)<br>`src/app/api/claims/[id]/route.ts` (Lines 34-83: ACID Transaction with FOR UPDATE)<br>`src/app/api/queries/run/route.ts` (Lines 48-62: Multi-stage CTE) |
+| **9** | **NoSQL / Vector feature, CRUD** | **7** | **100% Completed** | `src/lib/embed.ts` (Lines 11-40: Vector Create & Lines 45-70: Vector Update via Lateral Join)<br>`src/app/api/search/semantic/route.ts` (Lines 24-47: Vector Read with HNSW <=> Cosine Search)<br>`src/app/api/items/[id]/route.ts` (Lines 209-212: Vector Delete with Cascade Cleanup) |
+| **10** | **Next.js interface** | **3** | **100% Completed** | `src/app/page.tsx`<br>`src/components/BrowseView.tsx`<br>`src/components/MyActivityView.tsx`<br>`src/components/ClaimsReviewView.tsx`<br>`src/components/ItemDetailModal.tsx`<br>`src/components/ReportItemModal.tsx`<br>`src/components/FileClaimModal.tsx`<br>`src/components/SystemToolsModal.tsx` |
+| **11** | **Backend / API and database integration** | **2** | **100% Completed** | `src/lib/db.ts` (Lines 1-45: Connection Pool Singleton)<br>`.env.local`<br>`src/app/api/items/`<br>`src/app/api/claims/`<br>`src/app/api/matches/`<br>`src/app/api/queries/run/`<br>`src/app/api/search/semantic/`<br>`src/app/api/meta/`<br>`src/app/api/demo/reset/` |
+| **12** | **Authentication implementation & RBAC (Minimum two roles)** | **4** | **100% Completed** | `campus_lost_found_setup.sql` (Line 27: Role Check Constraint, Lines 247-251: pgcrypto Bcrypt Hashes)<br>`src/components/SignInModal.tsx`<br>`src/components/Header.tsx`<br>`src/app/api/claims/[id]/route.ts` (Lines 19-24: 403 Forbidden RBAC Enforcement) |
+| **13** | **Documentation, Git / GitHub** | **2** | **100% Completed** | `.git/` repository & commit history<br>`README.md`<br>`PROJECT_REPORT.md`<br>`PROJECT_REPORT.pdf`<br>`EVALUATION_RUBRICS_GUIDE.md` |
+| **14** | **Originality, individual contribution, Modification / Viva** | **4** | **100% Completed** | Sole contributor: Uttam K R (PES1UG24CS697)<br>`src/components/SystemToolsModal.tsx` (Interactive SQL console with live execution profiling and ad-hoc query execution) |
+
+---
+
+### Detailed Mapping: Where Every Rubric Lies in the Codebase
+
+#### Rubric 1: ER Diagram (2 Marks)
+- **Codebase Location**: `public/lost_found_ER.png`, displayed in UI at `src/components/SystemToolsModal.tsx` (Lines 314-325).
+- **Explanation**: Models 6 entities (`users`, `category`, `location`, `item`, `item_match`, `claim`) with exact cardinalities: 1:N for user-to-item, category-to-item, and location-to-item; 1:N recursive unary relationship for parent-to-child campus locations; M:N associative entity `item_match` with descriptive attributes (`similarity_score`, `match_status`); and 1:N for user-to-claim and item-to-claim. Total participation is enforced on items (requiring reporter, category, and location), while users have partial participation.
+
+#### Rubric 2: Relational Schema with Keys, Relationships, and Constraints (3 Marks)
+- **Codebase Location**: `campus_lost_found_setup.sql` (Lines 21-75) and `public/lost_found_relational_schema.png`.
+- **Explanation**: Formulated in Third Normal Form (3NF). Primary keys are defined on all tables (`user_id`, `category_id`, `location_id`, `item_id`, `claim_id`) with composite PK `(lost_item_id, found_item_id)` on `item_match`. Foreign keys specify explicit referential actions: `ON DELETE RESTRICT` on audit tables (`item.reported_by`, `claim.item_id`, `claim.claimed_by`), `ON DELETE CASCADE` on vector pairings (`item_match`), and `ON DELETE SET NULL` on hierarchical locations (`location.parent_location_id`). Strict domain constraints include `CHECK (role IN ('STUDENT', 'STAFF', 'ADMIN'))` (Line 27), `CHECK (item_type IN ('LOST', 'FOUND'))` (Line 48), `CHECK (status IN ('OPEN', 'CLAIMED', 'RESOLVED', 'CLOSED'))` (Line 50), and `CHECK (similarity_score BETWEEN -1 AND 1)` (Line 61).
+
+#### Rubric 3: SQL Database Implementation - DDL with Constraints (4 Marks)
+- **Codebase Location**: `campus_lost_found_setup.sql` (Lines 7-97) and `src/components/SystemToolsModal.tsx` (Schema Explorer).
+- **Explanation**: Comprehensive DDL implementation executing `CREATE EXTENSION` for `vector` and `pgcrypto` (Lines 8-9); clean cascading drops (Lines 11-19); 6 structured `CREATE TABLE` commands with column types, primary keys, foreign keys, unique keys, and check constraints (Lines 22-75); `ALTER TABLE item ALTER COLUMN title TYPE VARCHAR(200);` (Line 78); B-tree indexes (Lines 81-87); HNSW vector index (Lines 90-92); and a partial unique index `idx_one_approved_claim_per_item` on `claim(item_id) WHERE claim_status = 'APPROVED'` (Lines 95-96) guaranteeing single-claim approval at the engine level.
+
+#### Rubric 4: NoSQL / Vector Database Creation (4 Marks)
+- **Codebase Location**: `campus_lost_found_setup.sql` (Lines 8, 51, 90-92), `src/app/api/items/route.ts` (Line 27), and `src/lib/embed.ts` (Lines 11-40).
+- **Explanation**: Creates and integrates a high-dimensional vector database within PostgreSQL 16 using `pgvector`. Defines column `embedding VECTOR(384)` in `item` table to store dense floating-point text representations. Builds an HNSW cosine index `USING hnsw (embedding vector_cosine_ops) WHERE embedding IS NOT NULL;` for sub-millisecond approximate nearest-neighbor retrieval. Vector dimensionality and integrity are verified via `vector_dims(embedding)` in `src/app/api/items/route.ts` (Line 27).
+
+#### Rubric 5: Technology Justification (1 Mark)
+- **Codebase Location**: `PROJECT_REPORT.md` Section 3.2 (Lines 73-86) and `EVALUATION_RUBRICS_GUIDE.md` (Lines 207-234).
+- **Explanation**: Technical matrix evaluating Relational (MySQL), Document NoSQL (MongoDB), Dedicated Vector DB (Pinecone/Chroma), and PostgreSQL 16 + pgvector. Justifies that lost-and-found requires strict relational ACID locking (`FOR UPDATE`) on claims combined with semantic vector retrieval. Storing 384-d vectors directly inside PostgreSQL rows eliminates synchronization drift, dual-database network latency, and operational complexity.
+
+#### Rubric 6: DML Operations (4 Marks)
+- **Codebase Location**:
+  - `campus_lost_found_setup.sql` (Lines 243-345: Comprehensive seed data inserts)
+  - `src/app/api/items/route.ts` (Lines 94-161: `INSERT INTO item ... RETURNING *`)
+  - `src/app/api/items/[id]/route.ts` (Lines 178-212: `UPDATE` and `DELETE FROM item WHERE item_id = $1 RETURNING item_id, title;`)
+  - `src/app/api/claims/route.ts` (Lines 70-76: `INSERT INTO claim ... RETURNING *`)
+  - `src/app/api/claims/[id]/route.ts` (Lines 60-68: `UPDATE claim SET claim_status = $1 WHERE claim_id = $2 RETURNING ...`)
+- **Explanation**: Implements all 4 DML operations across application workflows: parameterized `INSERT` for new items and claims with proof; `UPDATE` modifying claim approval state and item status; `DELETE ... RETURNING` deleting items with automatic foreign key cascading deletion of dependent pairings; and complex `SELECT` queries with joins and predicates.
+
+#### Rubric 7: Nested, Correlated, Recursive & Join SQL Queries (4 Marks)
+- **Codebase Location**: `src/app/api/items/route.ts` (Lines 18-43 & 36-37), `src/app/api/matches/route.ts` (Lines 9-37), and `src/app/api/queries/run/route.ts` (Lines 29-75).
+- **Explanation**:
+  1. **Multi-Table 4-Way Relational JOIN**: Joins `item`, `category`, `location`, and `users` (`src/app/api/items/route.ts` Lines 18-43) to project complete item audit details, and 8-way join in `src/app/api/matches/route.ts`.
+  2. **Nested Subquery with IN and HAVING**: `SELECT user_id, name, email FROM users WHERE user_id IN (SELECT claimed_by FROM claim GROUP BY claimed_by HAVING COUNT(*) >= 1);` (`src/app/api/queries/run/route.ts` Lines 70-75).
+  3. **Correlated Subquery with EXISTS**: Evaluated in `src/app/api/items/route.ts` (Lines 36-37) as scalar correlated subqueries and `src/app/api/queries/run/route.ts` (Lines 64-69) referencing outer item rows.
+  4. **Recursive Query (`WITH RECURSIVE`)**: Graph traversal query (`src/app/api/queries/run/route.ts` Lines 29-43) traversing campus location hierarchy from root zones (`parent_location_id IS NULL`) down through child sub-zones, computing path string, depth level, and aggregate items reported.
+
+#### Rubric 8: Advanced SQL Concepts (Procedure/Function, Trigger, CTE) (6 Marks)
+- **Codebase Location**: `campus_lost_found_setup.sql` (Lines 99-240), `src/lib/embed.ts` (Lines 45-70), `src/app/api/claims/[id]/route.ts` (Lines 34-83), and `src/app/api/queries/run/route.ts` (Lines 48-62).
+- **Explanation**:
+  1. **Stored PL/pgSQL Function**: `find_matching_items(p_lost_item_id, p_limit)` (`campus_lost_found_setup.sql` Lines 210-240) invoked via `CROSS JOIN LATERAL` in `src/lib/embed.ts` (Lines 45-70).
+  2. **Triggers (3 distinct PL/pgSQL triggers)**:
+     - `validate_item_match_types()` (`campus_lost_found_setup.sql` Lines 99-121) on `item_match`: Ensures pair connects 'LOST' to 'FOUND'.
+     - `validate_claim_item()` (`campus_lost_found_setup.sql` Lines 124-156) on `claim`: Aborts claims targeting non-'FOUND' or non-'OPEN' items.
+     - `sync_item_status_after_claim()` (`campus_lost_found_setup.sql` Lines 159-186) on `claim`: Automatically mutates item status to `CLAIMED` upon claim approval or back to `OPEN` upon revocation.
+  3. **Common Table Expression (CTE)**: `src/app/api/queries/run/route.ts` Lines 48-62 (`WITH item_stats AS (...), match_categorized AS (...)`) partitioning matches into `HIGH`, `MEDIUM`, and `LOW` confidence tiers.
+  4. **Database Views (2 Views)**: `item_details_view` (`campus_lost_found_setup.sql` Lines 189-196) and `pending_claims_view` (Lines 199-207).
+  5. **ACID Transactions with Row-Level Locking**: `src/app/api/claims/[id]/route.ts` (Lines 37-83) executing `BEGIN;`, `FOR UPDATE;`, `UPDATE claim ...`, `COMMIT;`, and `ROLLBACK;`.
+
+#### Rubric 9: NoSQL / Vector Feature, CRUD (7 Marks)
+- **Codebase Location**:
+  - `campus_lost_found_setup.sql` (Lines 51, 90-92, 210-240)
+  - `src/lib/embed.ts` (Lines 11-70)
+  - `scripts/embed_query.py` (Lines 1-33)
+  - `src/app/api/search/semantic/route.ts` (Lines 24-47)
+  - `src/app/api/items/[id]/route.ts` (Lines 12-25)
+- **Explanation**: Covers complete vector lifecycle:
+  - **Create**: Computes 384-dimensional dense vectors on-the-fly via FastEmbed ONNX runtime (`sentence-transformers/all-MiniLM-L6-v2`) and persists in `item.embedding` (`src/lib/embed.ts` Lines 11-40).
+  - **Read**: Cosine distance similarity search using pgvector `<=>` operator (`1 - (embedding <=> $1::vector)`) accelerated by HNSW index (`src/app/api/search/semantic/route.ts` Lines 24-47).
+  - **Update**: Lateral vector match refresh (`src/lib/embed.ts` Lines 45-70) executing `CROSS JOIN LATERAL find_matching_items(lost.item_id, 5)` with `ON CONFLICT DO UPDATE`.
+  - **Delete**: Cascade deletion automatically purging candidate vector pairings in `item_match` when an item is deleted (`src/app/api/items/[id]/route.ts`).
+
+#### Rubric 10: Next.js Interface (3 Marks)
+- **Codebase Location**:
+  - `src/app/page.tsx` (Main client dashboard and state coordinator)
+  - `src/components/BrowseView.tsx` (Catalog with multi-column filtering by category, location, date, and status)
+  - `src/components/MyActivityView.tsx` (Personal student/staff item and claim tracking)
+  - `src/components/ClaimsReviewView.tsx` (Staff/Admin claims adjudication queue)
+  - `src/components/ItemDetailModal.tsx` (Item inspector with potential matches drawer and cosine similarity scores)
+  - `src/components/ReportItemModal.tsx` (Item reporting modal with live vectorization)
+  - `src/components/FileClaimModal.tsx` (Claim submission with proof details)
+  - `src/components/SystemToolsModal.tsx` (Interactive SQL runner, ER diagram, schema explorer, benchmark, and demo reset)
+  - `src/components/Header.tsx` (Top navigation with role switcher)
+- **Explanation**: Modern responsive interface built with Next.js 14 App Router, TypeScript, and Tailwind CSS. Provides intuitive multi-role workflows for students, staff, and system evaluators.
+
+#### Rubric 11: Backend / API and Database Integration (2 Marks)
+- **Codebase Location**: `src/lib/db.ts` (Lines 1-45), `.env.local`, and API route handlers in `src/app/api/`.
+- **Explanation**: Centralized connection pool singleton using `node-postgres` (`pg.Pool`) with parameterized queries preventing SQL injection. Dedicated route handlers (`/api/items`, `/api/claims`, `/api/matches`, `/api/queries/run`, `/api/search/semantic`, `/api/meta`, `/api/demo/reset`) return structured JSON with proper HTTP status codes (`200`, `201`, `400`, `403`, `404`, `500`). Database credentials are securely loaded from `.env.local`.
+
+#### Rubric 12: Authentication Implementation & RBAC (Minimum Two Roles) (4 Marks)
+- **Codebase Location**:
+  - Database constraint: `campus_lost_found_setup.sql` Line 27 (`CHECK (role IN ('STUDENT', 'STAFF', 'ADMIN'))`) and pgcrypto bcrypt password hashes (Lines 247-251).
+  - Frontend switcher: `src/components/SignInModal.tsx` and `src/components/Header.tsx`.
+  - Backend RBAC enforcement: `src/app/api/claims/[id]/route.ts` (Lines 19-24) blocking students with `403 Forbidden` from claim adjudication.
+- **Explanation**: Implements 3 distinct institutional roles (`STUDENT`, `STAFF`, `ADMIN`). Frontend dynamically adjusts interface actions based on active session; backend route handlers strictly validate caller role and block unauthorized actions, ensuring students cannot review or approve claims.
+
+#### Rubric 13: Documentation, Git / GitHub (2 Marks)
+- **Codebase Location**: `.git/` repository with commit history, `README.md`, `PROJECT_REPORT.md`, `PROJECT_REPORT.pdf`, `EVALUATION_RUBRICS_GUIDE.md`, and automated build script `scripts/build_pdf.js`.
+- **Explanation**: Clean git commit history documenting architectural evolution, detailed `README.md` with step-by-step setup and demo instructions, comprehensive evaluation defense guide `EVALUATION_RUBRICS_GUIDE.md`, and formal academic report `PROJECT_REPORT.md` compiled to PDF.
+
+#### Rubric 14: Originality, Individual Contribution, Modification / Viva (4 Marks)
+- **Codebase Location**: `PROJECT_REPORT.md` Section 1 (Lines 17-21), `src/app/api/queries/run/route.ts`, and `src/components/SystemToolsModal.tsx`.
+- **Explanation**: Authentic campus lost-and-found problem solved through a hybrid Relational + Vector architecture. End-to-end individual design and implementation by Uttam K R (*PES1UG24CS697*). Includes an interactive SQL console with real-time execution profiling (`performance.now()`) enabling live examiner modifications and ad-hoc SQL execution during the viva.
 
 ---
 
@@ -710,8 +808,8 @@ DBMSmini/
 
 | Potential Examiner Viva Question / Modification | System Implementation & Defense |
 | :--- | :--- |
-| *"Show me your Recursive Query and explain how it terminates."* | Open **Database Tools** -> **Evaluation Queries** -> Select **Query 4: Recursive Location Hierarchy**. The anchor member selects root zones (`parent_location_id IS NULL`), while the recursive member joins child zones on `parent_location_id = lh.location_id`. It terminates when no more child zones exist in the table. |
-| *"Prove that your database trigger works inside an ACID transaction."* | In the application, navigate to **Review Claims** (as Staff or Admin) -> Click **Approve** on Claim #1. A transaction banner confirms that `sync_item_status_after_claim` fired inside `BEGIN...COMMIT`, mutating the item's status from `OPEN` to `CLAIMED`. |
-| *"What happens if a student attempts to file a claim on a LOST item?"* | Run Query 13 in the console. The database trigger `validate_claim_item` raises an exception: *"Claims can only be submitted for FOUND items"*, aborting the transaction immediately. |
-| *"How does your vector search outperform keyword matching?"* | Open **Database Tools** -> **Semantic vs Keyword Test**. Search for *"black water bottle with metal cap"*. The vector engine returns *"Dark metal water bottle"* with ~0.74 cosine similarity, while keyword `ILIKE` returns zero matches due to vocabulary mismatch. |
-| *"Can two claims for the same item both be approved?"* | No. Partial unique index `CREATE UNIQUE INDEX idx_one_approved_claim_per_item ON claim(item_id) WHERE claim_status = 'APPROVED';` enforces at the database engine level that duplicate approved claims are rejected. |
+| *"Show me your Recursive Query and explain how it terminates."* | Open **Database Tools** -> **Evaluation Queries** -> Select **Query 4: Recursive Location Hierarchy** (`src/app/api/queries/run/route.ts` Lines 29-43). The anchor member selects root zones (`parent_location_id IS NULL`), while the recursive member joins child zones on `parent_location_id = lh.location_id`. It terminates when no more child zones exist in the table. |
+| *"Prove that your database trigger works inside an ACID transaction."* | In the application, navigate to **Review Claims** (as Staff or Admin) -> Click **Approve** on Claim #1. A transaction banner confirms that `sync_item_status_after_claim` fired inside `BEGIN...COMMIT` (`src/app/api/claims/[id]/route.ts` Lines 37-82), mutating the item's status from `OPEN` to `CLAIMED`. |
+| *"What happens if a student attempts to file a claim on a LOST item?"* | Attempting to file a claim on a lost item (`src/app/api/claims/route.ts` Lines 70-95) causes database trigger `validate_claim_item` (`campus_lost_found_setup.sql` Lines 124-156) to raise an exception: *"Claims can only be submitted for FOUND items"*, aborting the transaction immediately and returning HTTP 400. |
+| *"How does your vector search outperform keyword matching?"* | Open **Database Tools** -> **Semantic vs Keyword Test** (`src/app/api/search/semantic/route.ts`). Search for *"black water bottle with metal cap"*. The vector engine returns *"Dark metal water bottle"* with ~0.74 cosine similarity, while keyword `ILIKE` returns zero matches due to vocabulary mismatch. |
+| *"Can two claims for the same item both be approved?"* | No. Partial unique index `CREATE UNIQUE INDEX idx_one_approved_claim_per_item ON claim(item_id) WHERE claim_status = 'APPROVED';` (`campus_lost_found_setup.sql` Lines 95-96) enforces at the database engine level that duplicate approved claims are rejected. |

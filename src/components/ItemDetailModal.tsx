@@ -163,105 +163,105 @@ export default function ItemDetailModal({
             <p className="text-slate-800 leading-relaxed text-xs sm:text-sm">{item.description}</p>
           </div>
 
-          {/* SECTION: Potential Matches for LOST items */}
-          {isLost && (
-            <div className="space-y-3 pt-2 border-t border-slate-100">
-              <div>
-                <h3 className="text-sm font-semibold text-slate-900">
-                  Potential Matches ({details?.matches?.length || 0})
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Items found on campus with matching descriptions. These suggestions are potential, unconfirmed matches.
-                </p>
-              </div>
+          {/* SECTION: Potential Matches for both LOST and FOUND items */}
+          <div className="space-y-3 pt-2 border-t border-slate-100">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">
+                {isLost ? 'Potential Matches' : 'Matching Lost Reports'} ({details?.matches?.length || 0})
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {isLost
+                  ? 'Items found on campus with matching descriptions. These suggestions are potential, unconfirmed matches.'
+                  : 'Lost items reported on campus with matching descriptions.'}
+              </p>
+            </div>
 
-              {loading ? (
-                <div className="p-4 text-center text-xs text-slate-400">Scanning vector embeddings...</div>
-              ) : details?.matches && details.matches.length > 0 ? (
-                <div className="space-y-2.5">
-                  {details.matches.map((m: any, idx: number) => {
-                    const similarityPct = Math.round(m.similarity_score * 100);
+            {loading ? (
+              <div className="p-4 text-center text-xs text-slate-400">Scanning vector embeddings...</div>
+            ) : details?.matches && details.matches.length > 0 ? (
+              <div className="space-y-2.5">
+                {details.matches.map((m: any, idx: number) => {
+                  const similarityPct = Math.round(m.similarity_score * 100);
 
-                    return (
-                      <div
-                        key={idx}
-                        className="rounded-lg border border-slate-200 bg-white p-3.5 space-y-2 hover:border-slate-300 transition"
-                      >
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                          <div>
-                            <div className="flex items-center space-x-2">
-                              <span className="font-semibold text-slate-900 text-xs sm:text-sm">
-                                {m.matched_title}
-                              </span>
-                              <span className="text-[10px] px-1.5 py-0.2 rounded font-medium bg-slate-100 text-slate-600">
-                                {m.matched_status}
-                              </span>
-                            </div>
-                            <div className="text-[11px] text-slate-500 mt-0.5">
-                              Found at {m.matched_location || 'Campus'} • {m.matched_date || 'Recent'}
-                            </div>
+                  return (
+                    <div
+                      key={idx}
+                      className="rounded-lg border border-slate-200 bg-white p-3.5 space-y-2 hover:border-slate-300 transition"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                          <div className="flex items-center space-x-2">
+                            <span className="font-semibold text-slate-900 text-xs sm:text-sm">
+                              {m.matched_title}
+                            </span>
+                            <span className="text-[10px] px-1.5 py-0.2 rounded font-medium bg-slate-100 text-slate-600">
+                              {m.matched_status}
+                            </span>
                           </div>
-
-                          {/* Similarity Score */}
-                          <div className="flex items-center space-x-2 shrink-0">
-                            <div className="text-right">
-                              <span className="text-xs font-semibold text-slate-700">
-                                {similarityPct}% similarity
-                              </span>
-                              <div className="w-20 bg-slate-100 rounded-full h-1.5 mt-1 overflow-hidden">
-                                <div
-                                  className={`h-1.5 rounded-full ${
-                                    similarityPct >= 70
-                                      ? 'bg-slate-800'
-                                      : similarityPct >= 50
-                                      ? 'bg-slate-600'
-                                      : 'bg-slate-400'
-                                  }`}
-                                  style={{ width: `${Math.max(similarityPct, 5)}%` }}
-                                />
-                              </div>
-                            </div>
+                          <div className="text-[11px] text-slate-500 mt-0.5">
+                            {isLost ? 'Found at' : 'Lost at'} {m.matched_location || 'Campus'} • {m.matched_date || 'Recent'}
                           </div>
                         </div>
 
-                        {/* Description */}
-                        <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-2 rounded">
-                          {m.matched_description}
-                        </p>
-
-                        {/* Claim action */}
-                        {m.matched_status === 'OPEN' && (
-                          <div className="flex items-center justify-between pt-1">
-                            <span className="text-[11px] text-slate-400">
-                              Potential match • Subject to verification
+                        {/* Similarity Score */}
+                        <div className="flex items-center space-x-2 shrink-0">
+                          <div className="text-right">
+                            <span className="text-xs font-semibold text-slate-700">
+                              {similarityPct}% similarity
                             </span>
-                            <button
-                              onClick={() => {
-                                onClose();
-                                onOpenFileClaimModal({
-                                  item_id: m.matched_item_id,
-                                  title: m.matched_title,
-                                  location_name: m.matched_location || 'Campus',
-                                });
-                              }}
-                              className="inline-flex items-center space-x-1 text-xs font-medium text-slate-900 hover:text-indigo-600 transition"
-                            >
-                              <span>Claim this found item</span>
-                              <ArrowRight className="h-3 w-3" />
-                            </button>
+                            <div className="w-20 bg-slate-100 rounded-full h-1.5 mt-1 overflow-hidden">
+                              <div
+                                className={`h-1.5 rounded-full ${
+                                  similarityPct >= 70
+                                    ? 'bg-slate-800'
+                                    : similarityPct >= 50
+                                    ? 'bg-slate-600'
+                                    : 'bg-slate-400'
+                                }`}
+                                style={{ width: `${Math.max(similarityPct, 5)}%` }}
+                              />
+                            </div>
                           </div>
-                        )}
+                        </div>
                       </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-xs text-slate-500">
-                  No potential matches currently recorded. The system continuously evaluates against newly turned-in belongings.
-                </div>
-              )}
-            </div>
-          )}
+
+                      {/* Description */}
+                      <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-2 rounded">
+                        {m.matched_description}
+                      </p>
+
+                      {/* Claim action (only applicable when viewing a lost item to claim the candidate found item) */}
+                      {isLost && m.matched_status === 'OPEN' && (
+                        <div className="flex items-center justify-between pt-1">
+                          <span className="text-[11px] text-slate-400">
+                            Potential match • Subject to verification
+                          </span>
+                          <button
+                            onClick={() => {
+                              onClose();
+                              onOpenFileClaimModal({
+                                item_id: m.matched_item_id,
+                                title: m.matched_title,
+                                location_name: m.matched_location || 'Campus',
+                              });
+                            }}
+                            className="inline-flex items-center space-x-1 text-xs font-medium text-slate-900 hover:text-indigo-600 transition"
+                          >
+                            <span>Claim this found item</span>
+                            <ArrowRight className="h-3 w-3" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-xs text-slate-500">
+                No potential matches currently recorded. The system continuously evaluates against newly turned-in belongings.
+              </div>
+            )}
+          </div>
 
           {/* SECTION: Ownership Claims for FOUND items */}
           {!isLost && (

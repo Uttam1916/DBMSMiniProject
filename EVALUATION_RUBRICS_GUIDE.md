@@ -233,7 +233,7 @@ Provide a rigorous technical justification for choosing **PostgreSQL 16 with pgv
 ### Objective
 Demonstrate comprehensive data manipulation language (`INSERT`, `UPDATE`, `DELETE ... RETURNING`, and multi-table `SELECT`).
 
-### Exact Code & Queries (`demo_queries.sql`)
+### Exact Code & Application API Routes (`src/app/api/...` and `campus_lost_found_setup.sql`)
 ```sql
 -- 1. DML INSERT with dynamic relational lookups
 INSERT INTO item (title, description, item_type, item_date, status, reported_by, category_id, location_id)

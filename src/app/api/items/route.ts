@@ -162,11 +162,13 @@ export async function POST(request: NextRequest) {
 
     const createdItem = result.rows[0];
 
-    // Refresh candidate matches if vector embedding was stored
+    // Refresh candidate matches immediately before responding so new matches are available instantly
     if (vectorString) {
-      refreshItemMatches().catch((err) =>
-        console.error('Background refreshItemMatches error:', err)
-      );
+      try {
+        await refreshItemMatches();
+      } catch (err) {
+        console.error('Error in refreshItemMatches:', err);
+      }
     }
 
     return NextResponse.json(
