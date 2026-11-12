@@ -44,6 +44,7 @@ export default function SystemToolsModal({
   // Semantic search tester state
   const [testQuery, setTestQuery] = useState('black water bottle with metal cap');
   const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [searchResults, setSearchResults] = useState<{
     vector_results: any[];
     keyword_results: any[];
@@ -114,6 +115,7 @@ export default function SystemToolsModal({
     if (!testQuery.trim()) return;
 
     setIsSearching(true);
+    setSearchError(null);
     try {
       const res = await fetch('/api/search/semantic', {
         method: 'POST',
@@ -121,9 +123,14 @@ export default function SystemToolsModal({
         body: JSON.stringify({ query: testQuery.trim() }),
       });
       const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.details || data.error || 'Semantic search failed');
+      }
       setSearchResults(data);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      setSearchError(err.message || 'Failed to perform semantic search');
+      setSearchResults(null);
     } finally {
       setIsSearching(false);
     }
@@ -412,7 +419,13 @@ export default function SystemToolsModal({
                 </div>
               </form>
 
-              {searchResults && (
+              {searchError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                  <span className="font-semibold">Search Error: </span>{searchError}
+                </div>
+              )}
+
+              {searchResults && Array.isArray(searchResults.vector_results) && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
                   {/* Semantic Results */}
                   <div className="rounded-lg border border-slate-200 bg-white p-3.5 space-y-2">
@@ -455,7 +468,7 @@ export default function SystemToolsModal({
                       </span>
                     </div>
 
-                    {searchResults.keyword_results.length === 0 ? (
+                    {(!searchResults.keyword_results || searchResults.keyword_results.length === 0) ? (
                       <div className="p-4 text-center rounded bg-slate-50 border border-dashed border-slate-200 text-xs text-slate-500">
                         <strong>0 matches found.</strong>
                         <p className="text-[11px] text-slate-400 mt-0.5">

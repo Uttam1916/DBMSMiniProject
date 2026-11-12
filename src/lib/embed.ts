@@ -15,7 +15,7 @@ export async function generateTextEmbedding(text: string): Promise<number[]> {
 
   try {
     const { stdout, stderr } = await execFileAsync(pythonPath, [scriptPath, text], {
-      timeout: 10000,
+      timeout: 60000,
       env: {
         ...process.env,
         HF_HUB_DISABLE_IMPLICIT_TOKEN: '1',
