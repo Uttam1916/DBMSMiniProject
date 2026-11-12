@@ -20,12 +20,14 @@ interface SystemToolsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onResetDatabase: () => Promise<void>;
+  currentUser?: any;
 }
 
 export default function SystemToolsModal({
   isOpen,
   onClose,
   onResetDatabase,
+  currentUser,
 }: SystemToolsModalProps) {
   const [activeTab, setActiveTab] = useState<'sql' | 'schema' | 'semantic' | 'reset'>('sql');
 
@@ -137,6 +139,10 @@ export default function SystemToolsModal({
   };
 
   const handleResetDb = async () => {
+    if (currentUser?.role !== 'ADMIN') {
+      alert('Access Denied: Only administrators have permission to reset the database.');
+      return;
+    }
     if (!confirm('Reset database back to clean baseline state? This will clear test items and restore demo records.')) {
       return;
     }
@@ -507,9 +513,15 @@ export default function SystemToolsModal({
                   </div>
                 )}
 
+                {currentUser?.role !== 'ADMIN' && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                    Administrator authorization required. Current role: <strong>{currentUser?.role || 'STUDENT'}</strong>. Switch to Campus Administrator to reset.
+                  </div>
+                )}
+
                 <button
                   onClick={handleResetDb}
-                  disabled={isResetting}
+                  disabled={isResetting || currentUser?.role !== 'ADMIN'}
                   className="inline-flex items-center space-x-1.5 rounded-lg bg-slate-900 px-4 py-2 text-xs font-medium text-white hover:bg-slate-800 transition disabled:opacity-50"
                 >
                   <RotateCcw className={`h-3.5 w-3.5 ${isResetting ? 'animate-spin' : ''}`} />

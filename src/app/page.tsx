@@ -129,9 +129,13 @@ export default function Home() {
     }
   };
 
-  // Handler for resetting database back to clean baseline state
+  // Handler for resetting database back to clean baseline state (Admin Only)
   const handleResetDatabase = async () => {
-    const res = await fetch('/api/demo/reset', { method: 'POST' });
+    const res = await fetch('/api/demo/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_role: currentUser?.role }),
+    });
     const data = await res.json();
     if (!res.ok) {
       throw new Error(data.error || 'Failed to reset database');
@@ -257,6 +261,7 @@ export default function Home() {
         isOpen={isSystemToolsOpen}
         onClose={() => setIsSystemToolsOpen(false)}
         onResetDatabase={handleResetDatabase}
+        currentUser={currentUser}
       />
 
       {/* Restrained Institutional Footer */}
@@ -267,13 +272,17 @@ export default function Home() {
           </div>
           <div className="flex items-center space-x-3 text-slate-400 text-[11px]">
             <span>PostgreSQL 16 + pgvector</span>
-            <span>•</span>
-            <button
-              onClick={() => setIsSystemToolsOpen(true)}
-              className="text-slate-500 hover:text-slate-800 underline transition"
-            >
-              Evaluation &amp; Database Tools
-            </button>
+            {currentUser?.role === 'ADMIN' && (
+              <>
+                <span>•</span>
+                <button
+                  onClick={() => setIsSystemToolsOpen(true)}
+                  className="text-purple-600 hover:text-purple-800 font-medium underline transition"
+                >
+                  Admin Database Tools
+                </button>
+              </>
+            )}
           </div>
         </div>
       </footer>

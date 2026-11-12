@@ -132,15 +132,17 @@ export default function Header({
               <span>Report Item</span>
             </button>
 
-            {/* System / SQL Console Utility for Evaluation */}
-            <button
-              onClick={onOpenSystemTools}
-              className="hidden lg:inline-flex items-center space-x-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition"
-              title="Open DBMS Level 3 Evaluation Console, SQL Runner & Schema Inspector"
-            >
-              <Terminal className="h-3.5 w-3.5 text-slate-500" />
-              <span>Database Tools</span>
-            </button>
+            {/* System / SQL Console Utility for Evaluation - Restricted to ADMIN */}
+            {currentUser?.role === 'ADMIN' && (
+              <button
+                onClick={onOpenSystemTools}
+                className="hidden lg:inline-flex items-center space-x-1.5 rounded-lg border border-purple-200 bg-purple-50 px-2.5 py-1.5 text-xs font-medium text-purple-700 hover:bg-purple-100 transition"
+                title="Admin Only: DBMS Level 3 Evaluation Console, SQL Runner & Schema Inspector"
+              >
+                <Terminal className="h-3.5 w-3.5 text-purple-600" />
+                <span>Database Tools</span>
+              </button>
+            )}
 
             {/* User Profile / Authentication Menu */}
             {currentUser ? (

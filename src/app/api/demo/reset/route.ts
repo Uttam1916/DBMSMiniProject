@@ -1,9 +1,20 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getClient } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST() {
+export async function POST(request: NextRequest) {
+  const body = await request.json().catch(() => ({}));
+  const { user_role } = body;
+
+  // Enforce RBAC: Only ADMIN can reset the database
+  if (user_role && user_role !== 'ADMIN') {
+    return NextResponse.json(
+      { error: 'Forbidden: Only Campus Administrators can reset the database.' },
+      { status: 403 }
+    );
+  }
+
   const client = await getClient();
   try {
     await client.query('BEGIN;');
